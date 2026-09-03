@@ -1,0 +1,83 @@
+import { NextResponse } from 'next/server'
+import { supabase } from '@/lib/supabase'
+
+export async function POST(request: Request) {
+  try {
+    const { pin, nomsEquip } = await request.json()
+
+    if (!pin || !nomsEquip) {
+      return NextResponse.json({ error: 'Falten dades d’accés (PIN i Nom d’equip).' }, { status: 400 })
+    }
+
+    // 1. Comprovar si el PIN existeix i la sessió està en estat EN_CURS
+    const { data: sessio, error: errorSessio } = await supabase
+      .from('sessions')
+      .select('id_sessio, estat, id_client, id_template')
+      .eq('pin_acces', pin)
+      .eq('estat', 'EN_CURS')
+      .single()
+
+    if (errorSessio || !sessio) {
+      return NextResponse.json({ error: 'El PIN no és vàlid o la sessió ha finalitzat.' }, { status: 401 })
+    }
+
+    const nomNet = nomsEquip.trim()
+
+    // 1.5. Comprovar si ja existeix un equip amb el mateix nom a la mateixa sessió
+    const { data: equipExistent } = await supabase
+      .from('equips')
+      .select('id_equip')
+      .eq('id_sessio', sessio.id_sessio)
+      .ilike('nom_equip', nomNet)
+      .maybeSingle()
+
+    if (equipExistent) {
+      return NextResponse.json(
+        { error: `El nom d'equip "${nomNet}" ja està registrat en aquesta sessió. Triador un nom diferent.` },
+        { status: 400 }
+      )
+    }
+
+    // 2. Crear l'equip oficial a la taula equips per a aquesta sessió
+    const { data: nouEquip, error: errorEquip } = await supabase
+      .from('equips')
+      .insert([
+        {
+          id_sessio: sessio.id_sessio,
+          nom_equip: nomNet,
+          missio_actual: 'MISION_1'
+        }
+      ])
+      .select('id_equip, id_sessio, nom_equip, missio_actual')
+      .single()
+
+    if (errorEquip) throw errorEquip
+
+    // 3. Recuperar la informació del client per obtenir els crèdits disponibles
+    const { data: clientData } = await supabase
+      .from('clients')
+      .select('id_client, credits_disponibles')
+      .eq('id_client', sessio.id_client)
+      .single()
+
+    // 4. Recuperar la plantilla pedagògica per enviar el context inicial
+    const templateId = sessio.id_template || 'MISION_1'
+    const { data: templateData } = await supabase
+      .from('pedagogical_templates')
+      .select('*')
+      .eq('id_template', templateId)
+      .single()
+
+    return NextResponse.json({
+      success: true,
+      equip: nouEquip,
+      sessio,
+      credits_disponibles: clientData?.credits_disponibles ?? 0,
+      template: templateData || null
+    })
+
+  } catch (error: any) {
+    console.error('Error al porter d’API join-session:', error)
+    return NextResponse.json({ error: error?.message || 'Error intern del servidor de seguretat.' }, { status: 500 })
+  }
+}
