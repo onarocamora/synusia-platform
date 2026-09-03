@@ -19,11 +19,11 @@ Ets l'Agent de Backoffice (DevSecOps) de Synusia.
 Revisa el fitxer. El teu objectiu:
 1. Eliminar els tipus 'any' introduint interfícies.
 2. Afegir try/catch als JSON.parse i protegir crides asíncrones.
-3. Aïllar inputs d'usuari a <user_input> als prompts.
+3. NOMÉS a les rutes API (com api/chat/route.ts), assegura't que el text que se li envia a OpenAI contingui <user_input>. MAI afegeixis etiquetes <user_input> a codi TypeScript, React, JSON.stringify o variables generals.
 
 REGLES ESTRICTES D'OUTPUT:
 - Si el codi ja és correcte, segur i tipat, retorna ÚNICAMENT la paraula: [PERFECT_CODE]
-- Si cal fer canvis, retorna EL CODI SENCER, de dalt a baix. SENSE marques de markdown, SENSE explicacions, SENSE comentaris afegits al final. Només codi executable.
+- Si cal fer canvis, retorna EL CODI SENCER, de dalt a baix. SENSE marques de markdown, SENSE explicacions. Només codi executable.
 `;
 
 // Funció per trobar tots els fitxers recursivament

@@ -31,7 +31,7 @@ interface ClientData {
 
 interface TemplateData {
   id_template: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export async function POST(request: Request) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falten dades d’accés (PIN i Nom d’equip).' }, { status: 400 })
     }
 
-    const { data: sessio, error: errorSessio }: { data: Session | null; error: any } = await supabase
+    const { data: sessio, error: errorSessio }: { data: Session | null; error: unknown } = await supabase
       .from('sessions')
       .select('id_sessio, estat, id_client, id_template')
       .eq('pin_acces', pin)
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
     const nomNet = nomsEquip.trim()
 
-    const { data: equipExistent, error: errorEquipExistent }: { data: ExistingTeam | null; error: any } = await supabase
+    const { data: equipExistent, error: errorEquipExistent }: { data: ExistingTeam | null; error: unknown } = await supabase
       .from('equips')
       .select('id_equip')
       .eq('id_sessio', sessio.id_sessio)
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: nouEquip, error: errorEquip }: { data: NewTeam | null; error: any } = await supabase
+    const { data: nouEquip, error: errorEquip }: { data: NewTeam | null; error: unknown } = await supabase
       .from('equips')
       .insert([
         {
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
     if (errorEquip) throw errorEquip
 
-    const { data: clientData, error: errorClientData }: { data: ClientData | null; error: any } = await supabase
+    const { data: clientData, error: errorClientData }: { data: ClientData | null; error: unknown } = await supabase
       .from('clients')
       .select('id_client, credits_disponibles')
       .eq('id_client', sessio.id_client)
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     }
 
     const templateId = sessio.id_template || 'MISION_1'
-    const { data: templateData, error: errorTemplateData }: { data: TemplateData | null; error: any } = await supabase
+    const { data: templateData, error: errorTemplateData }: { data: TemplateData | null; error: unknown } = await supabase
       .from('pedagogical_templates')
       .select('*')
       .eq('id_template', templateId)
@@ -116,8 +116,8 @@ export async function POST(request: Request) {
       template: templateData || null
     })
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error al porter d’API join-session:', error)
-    return NextResponse.json({ error: error?.message || 'Error intern del servidor de seguretat.' }, { status: 500 })
+    return NextResponse.json({ error: (error as Error)?.message || 'Error intern del servidor de seguretat.' }, { status: 500 })
   }
 }

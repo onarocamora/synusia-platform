@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import Image from 'next/image';
 
 interface TeamData {
   id_equip: string
@@ -29,21 +30,96 @@ const mapMissions: Record<string, number> = {
 }
 
 export default function AdminDashboard() {
+  // ---------------------------------------------------------------------------
+  // ESTATS D'AUTENTICACIÓ (PROTECCIÓ FACILITADOR)
+  // ---------------------------------------------------------------------------
+  const [authChecking, setAuthChecking] = useState<boolean>(true)
+  const [session, setSession] = useState<any>(null)
+  const [loginEmail, setLoginEmail] = useState<string>('')
+  const [loginPassword, setLoginPassword] = useState<string>('')
+  const [loginLoading, setLoginLoading] = useState<boolean>(false)
+  const [loginError, setLoginError] = useState<string | null>(null)
+
+  // ---------------------------------------------------------------------------
+  // ESTATS DEL TAULELL DE CONTROL
+  // ---------------------------------------------------------------------------
   const [pinSessio, setPinSessio] = useState<string>('')
   const [idSessio, setIdSessio] = useState<string | null>(null)
   const [equips, setEquips] = useState<TeamData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [equipSeleccionat, setEquipSeleccionat] = useState<TeamData | null>(null)
 
-  // 🎯 Control del Modal de Llançament i Plantilles
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [templateSeleccionada, setTemplateSeleccionada] = useState<string>('')
   const [mostrarModalLlançament, setMostrarModalLlançament] = useState<boolean>(false)
 
-  // 💳 Control de Client
   const [idClientActual, setIdClientActual] = useState<string>('')
 
-  // Generador de PINs
+  // Verificació inicial de sessió a Supabase
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session: activeSession } } = await supabase.auth.getSession()
+        setSession(activeSession)
+      } catch (err) {
+        console.error('Error comprovant la sessió:', err)
+      } finally {
+        setAuthChecking(false)
+      }
+    }
+
+    checkSession()
+
+    // Escolta canvis d'estat a Supabase Auth (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      setSession(currentSession)
+      setAuthChecking(false)
+    })
+
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [])
+
+  // Carregar dades quan el facilitador està autenticat
+  useEffect(() => {
+    if (session) {
+      carregarPlantillesIClient()
+    }
+  }, [session])
+
+  // Login de Facilitador
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoginLoading(true)
+    setLoginError(null)
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      })
+
+      if (error) {
+        setLoginError('Accés denegat. Credencials de facilitador incorrectes.')
+      } else {
+        setSession(data.session)
+      }
+    } catch (err) {
+      setLoginError('Error de connexió amb el servidor d’autenticació.')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
+
+  // Logout de Facilitador
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    setSession(null)
+    setEquips([])
+    setIdSessio(null)
+  }
+
   const generarPinUnic = () => {
     const caracters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
     let resultat = ''
@@ -53,40 +129,35 @@ export default function AdminDashboard() {
     return resultat
   }
 
-  // Obtenir client i llistar totes les plantilles de Supabase
   const carregarPlantillesIClient = async () => {
-    // 1. Obtenir ID de client
-    const { data: clients } = await supabase
-      .from('clients')
-      .select('id_client')
-      .limit(1)
+    try {
+      const { data: clients } = await supabase
+        .from('clients')
+        .select('id_client')
+        .limit(1)
 
-    if (clients && clients.length > 0) {
-      setIdClientActual(clients[0].id_client)
-    }
+      if (clients && clients.length > 0) {
+        setIdClientActual(clients[0].id_client)
+      }
 
-    // 2. Obtenir llista de plantilles
-    const { data: dataTemplates } = await supabase
-      .from('pedagogical_templates')
-      .select('id_template, titol')
+      const { data: dataTemplates } = await supabase
+        .from('pedagogical_templates')
+        .select('id_template, titol')
 
-    if (dataTemplates && dataTemplates.length > 0) {
-      setTemplates(dataTemplates)
-      setTemplateSeleccionada(dataTemplates[0].id_template)
+      if (dataTemplates && dataTemplates.length > 0) {
+        setTemplates(dataTemplates)
+        setTemplateSeleccionada(dataTemplates[0].id_template)
+      }
+    } catch (err) {
+      console.error(err)
     }
   }
 
-  useEffect(() => {
-    carregarPlantillesIClient()
-  }, [])
-
-  // Obrir finestra modal per escollir plantilla
   const obrirModalLlançament = () => {
     carregarPlantillesIClient()
     setMostrarModalLlançament(true)
   }
 
-  // 🚀 Executar el llançament amb la plantilla triada
   const arrancarNouTallerMonetitzat = async () => {
     if (!templateSeleccionada) {
       alert("⚠️ Seleccioneu una plantilla o cas abans de continuar!")
@@ -96,18 +167,23 @@ export default function AdminDashboard() {
     let clientId = idClientActual.trim()
 
     if (!clientId) {
-      const { data: nouClient, error: errClient } = await supabase
-        .from('clients')
-        .insert([{ nom: 'UNIVERSITAT DEMO', tipus_client: 'ACADEMIC', sector: 'EDUCACIO', credits_disponibles: 10 }])
-        .select('id_client')
-        .single()
+      try {
+        const { data: nouClient, error: errClient } = await supabase
+          .from('clients')
+          .insert([{ nom: 'UNIVERSITAT DEMO', tipus_client: 'ACADEMIC', sector: 'EDUCACIO', credits_disponibles: 10 }])
+          .select('id_client')
+          .single()
 
-      if (errClient || !nouClient) {
-        alert("🚨 Error en inicialitzar el client per defecte.")
+        if (errClient || !nouClient) {
+          alert("🚨 Error en inicialitzar el client per defecte.")
+          return
+        }
+        clientId = nouClient.id_client
+        setIdClientActual(clientId)
+      } catch (err) {
+        console.error(err)
         return
       }
-      clientId = nouClient.id_client
-      setIdClientActual(clientId)
     }
 
     setLoading(true)
@@ -145,7 +221,6 @@ export default function AdminDashboard() {
 
       const nouPin = generarPinUnic()
 
-      // Registrar la nova sessió associada A LA PLANTILLA SELECCIONADA
       const { data: novaSessio, error: errorSessio } = await supabase
         .from('sessions')
         .insert([{
@@ -178,7 +253,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🔄 CARREGAR DATA DE LA SESSIÓ
   const carregarDadesSessio = async (pinTarget: string, isSilent = false) => {
     if (!pinTarget.trim()) return
     if (!isSilent) setLoading(true)
@@ -240,7 +314,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🔒 TANCAMENT REALS
   const arxivarSessióMestre = async () => {
     if (!idSessio) return
     const confirmar = confirm("🚨 Vols donar per acabat aquest taller i FINALITZAR la sessió? Els equips quedaran arxivats i la terminal de l'alumne es bloquejarà.")
@@ -268,7 +341,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // 🔄 REALTIME LISTENER + POLLING FALLBACK
   useEffect(() => {
     if (!pinSessio || !idSessio) return
 
@@ -298,7 +370,6 @@ export default function AdminDashboard() {
     }
   }, [idSessio, pinSessio])
 
-  // ⚡ ACTUALITZACIÓ DE CRÈDITS
   const modificarCreditsMestre = async (idEquip: string, idClient: string, canvi: number) => {
     const equip = equips.find(e => e.id_equip === idEquip)
     const targetClientId = idClient || idClientActual
@@ -320,7 +391,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // ⚡ FORÇAR SALT DE MISSIÓ
   const forcarSaltMissio = async (idEquip: string, seguentMissio: string) => {
     try {
       const { error } = await supabase
@@ -337,7 +407,6 @@ export default function AdminDashboard() {
     }
   }
 
-  // Descarregar telemetria
   const descarregarTelemetria = (idSessioParam: string, format: 'csv' | 'json') => {
     if (!idSessioParam) return
     const url = `/api/export?id_sessio=${idSessioParam}&format=${format}`
@@ -349,22 +418,127 @@ export default function AdminDashboard() {
     document.body.removeChild(link)
   }
 
+  // ---------------------------------------------------------------------------
+  // VISTA 1: ESTAT DE CÀRREGA INICIAL
+  // ---------------------------------------------------------------------------
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center text-stone-400 font-mono text-xs">
+        Verificant permisos de facilitador...
+      </div>
+    )
+  }
+
+  // ---------------------------------------------------------------------------
+  // VISTA 2: CARÀTULA D'ACCÉS PER A FACILITADORS (ESTIL CLAUDE / MINIMAL)
+  // ---------------------------------------------------------------------------
+  if (!session) {
+    return (
+      <div className="min-h-screen flex flex-col justify-between bg-[#FAF8F5] text-stone-800 font-sans p-6 selection:bg-amber-100">
+
+        {/* Capçalera */}
+        <header className="max-w-5xl w-full mx-auto flex justify-between items-center py-4">
+          <div className="flex items-center gap-3">
+            {/* Si ja has posat el logo, assegura't que l'import d'Image hi és a dalt */}
+            <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
+          </div>
+          <span className="text-[10px] font-mono px-3 py-1.5 bg-white border border-stone-200 text-stone-500 rounded-md shadow-xs">
+            PANELL D'OPERACIONS
+          </span>
+        </header>
+
+        {/* Formulari Central */}
+        <main className="max-w-md w-full mx-auto my-auto bg-white border border-stone-200/80 rounded-2xl p-8 shadow-sm">
+          <div className="mb-8 text-center space-y-2">
+            <h1 className="text-2xl font-serif font-medium text-stone-900 tracking-tight">
+              Accés Facilitador
+            </h1>
+            <p className="text-xs text-stone-500 leading-relaxed">
+              Autenticació requerida per accedir al panell de gestió de sessions i telemetria.
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center gap-2">
+              <span>⚠️</span> {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="block text-[11px] font-medium text-stone-600 mb-1.5">
+                Correu Electrònic
+              </label>
+              <input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="pedrojuanes@synusia.io"
+                className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-medium text-stone-600 mb-1.5">
+                Contrasenya
+              </label>
+              <input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••••••"
+                className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white transition-all"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium py-3 rounded-xl text-sm transition duration-200 disabled:opacity-50 mt-4 shadow-sm cursor-pointer"
+            >
+              {loginLoading ? 'Autenticant...' : 'Entrar al Panell →'}
+            </button>
+          </form>
+        </main>
+
+        {/* Peu de pàgina */}
+        <footer className="max-w-5xl w-full mx-auto text-center py-4 text-[11px] text-stone-400 font-mono">
+          Nucli Innovation SL &copy; {new Date().getFullYear()} &mdash; Synusia Platform
+        </footer>
+      </div>
+    )
+  }
+
+  // ---------------------------------------------------------------------------
+  // VISTA 3: TAULELL DE CONTROL (FACILITADOR AUTENTICAT)
+  // ---------------------------------------------------------------------------
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-stone-800 p-6 font-sans selection:bg-amber-100">
 
-      {/* CAPÇALERA */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-stone-200/80 pb-6 mb-6 gap-4 no-print">
         <div>
-          <h1 className="text-2xl font-serif font-medium tracking-tight text-stone-900 flex items-center gap-2">
-            🏛️ Synusia Facilitator Operations Panel
+          <h1 className="text-2xl font-serif font-medium tracking-tight text-stone-900 flex items-center gap-3">
+            <Image src="/logo.png" alt="Synusia Logo" width={32} height={32} className="object-contain" />
+            Synusia Operations Panel
           </h1>
           <p className="text-xs text-stone-500 mt-1">Gestió aïllada multi-tenant per a tallers executius, universitats i entitats públiques.</p>
-          <Link
-            href="/admin/templates"
-            className="inline-flex items-center gap-1.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors mt-3 shadow-xs"
-          >
-            🎨 Gestor de Plantilles / Authoring Tool →
-          </Link>
+
+          <div className="flex items-center gap-2 mt-3">
+            <Link
+              href="/admin/templates"
+              className="inline-flex items-center gap-1.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-xs"
+            >
+              🎨 Gestor de Plantilles / Authoring Tool →
+            </Link>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-xs cursor-pointer"
+            >
+              🚪 Tancar Sessió ({session.user?.email})
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2 bg-white p-2 rounded-xl border border-stone-200 shadow-xs">
@@ -392,7 +566,6 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      {/* 🚀 MODAL DE SELECCIÓ DE PLANTILLA */}
       {mostrarModalLlançament && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
           <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
@@ -447,7 +620,6 @@ export default function AdminDashboard() {
       {idSessio && (
         <div className="space-y-4">
 
-          {/* BARRA D'EXPORTACIÓ I CONTROL DE SESSIÓ */}
           <div className="flex flex-wrap justify-between items-center bg-white p-3 rounded-xl border border-stone-200 shadow-xs gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-medium text-stone-500 uppercase tracking-wider mr-1">
@@ -481,10 +653,8 @@ export default function AdminDashboard() {
             </button>
           </div>
 
-          {/* MONITOR D'EQUIPS I AUDITORIA */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
-            {/* Llista d'Equips */}
             <div className="xl:col-span-2 space-y-4">
               <h2 className="text-xs font-mono font-medium tracking-wider uppercase text-stone-500">
                 // MONITOR DE LA SALA EN ACTIU ({equips.length} Equips)
@@ -549,19 +719,16 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Expedient d'Auditoria de l'Equip Seleccionat */}
             <div className="bg-white border border-stone-200 rounded-xl p-5 h-[76vh] flex flex-col justify-between overflow-y-auto shadow-xs">
               {equipSeleccionat ? (
                 <div className="space-y-6 h-full flex flex-col justify-between">
                   <div className="space-y-6">
 
-                    {/* Capçalera d'Equip */}
                     <div className="border-b border-stone-100 pb-3">
                       <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">// RAW COGNITIVE AUDIT LOGS</span>
                       <h2 className="text-lg font-serif font-medium text-stone-900 mt-0.5">{equipSeleccionat.noms_equip}</h2>
                     </div>
 
-                    {/* 1. Reflexió Inicial (Missió 0) */}
                     <div className="space-y-1.5">
                       <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block">
                         🧠 Reflexió de Calibratge (Misió 0):
@@ -571,7 +738,6 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    {/* 2. Dictamen Final (Si s'ha entregat) */}
                     <div className="space-y-1.5">
                       <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block">
                         ⚖️ Dictamen / Resolució Final:
@@ -587,7 +753,6 @@ export default function AdminDashboard() {
                       )}
                     </div>
 
-                    {/* 3. Dades de Registre Temporal */}
                     <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-1 font-mono text-[11px] text-stone-600">
                       <div className="flex justify-between">
                         <span>Hora Inici:</span>

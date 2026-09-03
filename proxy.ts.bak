@@ -1,0 +1,19 @@
+import { NextResponse, type NextRequest } from 'next/server';
+
+export default function proxy(request: NextRequest) {
+    // Comprovem si existeix una cookie de sessió activa de Supabase
+    const hasAuthCookie = request.cookies.getAll().some(cookie => cookie.name.includes('sb-'));
+
+    const isProtectedArea = request.nextUrl.pathname.startsWith('/simulacio');
+
+    // Si intenta accedir a la simulació sense estar autenticat, es redirigeix a la portada
+    if (isProtectedArea && !hasAuthCookie) {
+        return NextResponse.redirect(new URL('/', request.url));
+    }
+
+    return NextResponse.next();
+}
+
+export const config = {
+    matcher: ['/simulacio/:path*'],
+};

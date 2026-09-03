@@ -5,6 +5,19 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+interface Log {
+    creat_el: string;
+    id_equip: string;
+    tipo_evento: string;
+    metrics_payload?: any;
+    equips?: { nom_equip?: string };
+}
+
+interface SupabaseResponse {
+    data: Log[] | null;
+    error: { message: string } | null;
+}
+
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const idSessio = searchParams.get('id_sessio');
@@ -14,18 +27,26 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Falta el paràmetre id_sessio' }, { status: 400 });
     }
 
-    // Obtenir logs en cru de la sessió ordenats cronològicament
-    const { data: logs, error } = await supabase
-        .from('telemetry_logs')
-        .select('*, equips(nom_equip)')
-        .eq('id_sessio', idSessio)
-        .order('creat_el', { ascending: true });
+    let logs: Log[] | null = null;
+    let error: { message: string } | null = null;
+
+    try {
+        const response: SupabaseResponse = await supabase
+            .from('telemetry_logs')
+            .select('*, equips(nom_equip)')
+            .eq('id_sessio', idSessio)
+            .order('creat_el', { ascending: true });
+
+        logs = response.data;
+        error = response.error;
+    } catch (err) {
+        return NextResponse.json({ error: 'Error al obtenir logs' }, { status: 500 });
+    }
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // Format 1: JSON Verge Estructurat
     if (format === 'json') {
         return new NextResponse(JSON.stringify(logs, null, 2), {
             status: 200,
@@ -36,7 +57,6 @@ export async function GET(request: NextRequest) {
         });
     }
 
-    // Format 2: CSV Estructurat compatible amb analyze_telemetry.py i Excel
     if (format === 'csv') {
         const headers = [
             'TIMESTAMP_ISO',
@@ -58,13 +78,17 @@ export async function GET(request: NextRequest) {
             const dataHora = new Date(log.creat_el);
             const horaLocal = dataHora.toLocaleTimeString('ca-ES', { hour12: false });
 
-            // Extracció neta de valors
             const actor = payload.actor || 'SISTEMA';
             const missio = payload.missio || payload.missio_actual || 'MISION_1';
 
-            // Extreure el text pur independentment de la clau utilitzada
             const rawText = payload.text || payload.user_prompt || payload.bot_response || JSON.stringify(payload);
-            const textSanititzat = String(rawText).replace(/"/g, '""').replace(/\n/g, ' ');
+            let textSanititzat = '';
+
+            try {
+                textSanititzat = String(rawText).replace(/"/g, '""').replace(/\n/g, ' ');
+            } catch {
+                textSanititzat = 'Text no vàlid';
+            }
 
             const row = [
                 `"${log.creat_el}"`,
@@ -80,7 +104,6 @@ export async function GET(request: NextRequest) {
             csvRows.push(row.join(','));
         });
 
-        // S'afegeix el caracter \uFEFF (UTF-8 BOM) per a una lectura impecable a Excel/Python
         const csvContent = '\uFEFF' + csvRows.join('\n');
 
         return new NextResponse(csvContent, {

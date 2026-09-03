@@ -16,13 +16,15 @@ interface MissionConfig {
     seguent_missio?: string
 }
 
+interface ScenarioContext {
+    welcome_message?: string
+    missions?: Record<string, MissionConfig>
+}
+
 interface PedagogicalTemplate {
     id_template: string
     titol?: string
-    scenario_context: {
-        welcome_message?: string
-        missions?: Record<string, MissionConfig>
-    }
+    scenario_context: ScenarioContext
 }
 
 const defaultMissionsInitial: Record<string, MissionConfig> = {
@@ -128,33 +130,33 @@ export default function AuthoringTool() {
     const [guardant, setGuardant] = useState(false)
     const [missatge, setMissatge] = useState('')
 
-    // Pestanya de missió activa al formulari
     const [tabMissio, setTabMissio] = useState<'MISION_1' | 'MISION_2' | 'MISION_3' | 'MISION_4'>('MISION_1')
 
-    // Estats del cas
     const [esEdicio, setEsEdicio] = useState(false)
     const [idTemplate, setIdTemplate] = useState('')
     const [titol, setTitol] = useState('')
     const [welcomeMessage, setWelcomeMessage] = useState('Benvinguts a la simulació d\'auditoria pedagògica Synusia.')
     const [missionsData, setMissionsData] = useState<Record<string, MissionConfig>>(defaultMissionsInitial)
 
-    // 🤖 AI Case Creator Modal State
     const [showAIModal, setShowAIModal] = useState(false)
     const [aiPromptInput, setAiPromptInput] = useState('')
     const [aiSectorInput, setAiSectorInput] = useState('Corporatiu')
     const [generatingAI, setGeneratingAI] = useState(false)
 
-    // Carregar casos des de Supabase
     const carregarPlantilles = async () => {
         setLoading(true)
-        const { data } = await supabase.from('pedagogical_templates').select('*')
-        if (data) setTemplates(data)
-        setLoading(false)
+        try {
+            const { data } = await supabase.from('pedagogical_templates').select('*')
+            if (data) setTemplates(data)
+        } catch (error) {
+            alert(`❌ Error al carregar plantilles: ${error}`)
+        } finally {
+            setLoading(false)
+        }
     }
 
     useEffect(() => { carregarPlantilles() }, [])
 
-    // Netejar per crear cas nou manual
     const iniciarNovaPlantilla = () => {
         setEsEdicio(false)
         setIdTemplate('')
@@ -165,7 +167,6 @@ export default function AuthoringTool() {
         setMissatge('')
     }
 
-    // Carregar cas existent per editar
     const carregarPerEditar = (tmpl: PedagogicalTemplate) => {
         setEsEdicio(true)
         setIdTemplate(tmpl.id_template)
@@ -178,7 +179,6 @@ export default function AuthoringTool() {
         setMissatge(`✏️ Editant el cas: ${tmpl.id_template}`)
     }
 
-    // 📋 Duplicar cas
     const duplicarTemplate = (tmpl: PedagogicalTemplate) => {
         setEsEdicio(false)
         setIdTemplate(`${tmpl.id_template}_COPY`)
@@ -191,7 +191,6 @@ export default function AuthoringTool() {
         setMissatge(`📋 Duplicat del cas [${tmpl.id_template}]. Canvieu l'ID i deseu.`)
     }
 
-    // 🤖 Generar Cas amb IA
     const generarCasAmbIA = async () => {
         if (!aiPromptInput.trim()) {
             alert("⚠️ Escriviu una breu descripció de la temàtica del cas!");
@@ -229,7 +228,6 @@ export default function AuthoringTool() {
         }
     }
 
-    // Actualitzar camp de la missió activa
     const updateMissionField = (field: keyof MissionConfig, value: string) => {
         setMissionsData(prev => ({
             ...prev,
@@ -240,7 +238,6 @@ export default function AuthoringTool() {
         }))
     }
 
-    // Desar a Supabase
     const handleGuardarTemplate = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!idTemplate.trim()) {
@@ -260,24 +257,28 @@ export default function AuthoringTool() {
             }
         }
 
-        const { error } = await supabase
-            .from('pedagogical_templates')
-            .upsert(novaPlantilla, { onConflict: 'id_template' })
+        try {
+            const { error } = await supabase
+                .from('pedagogical_templates')
+                .upsert(novaPlantilla, { onConflict: 'id_template' })
 
-        if (error) {
-            setMissatge(`❌ Error en desar: ${error.message}`)
-        } else {
-            setMissatge(`✅ Cas [${idTemplate.toUpperCase()}] desat amb èxit a Supabase!`)
-            carregarPlantilles()
-            setEsEdicio(true)
+            if (error) {
+                setMissatge(`❌ Error en desar: ${error.message}`)
+            } else {
+                setMissatge(`✅ Cas [${idTemplate.toUpperCase()}] desat amb èxit a Supabase!`)
+                carregarPlantilles()
+                setEsEdicio(true)
+            }
+        } catch (error) {
+            setMissatge(`❌ Error en desar: ${error}`)
+        } finally {
+            setGuardant(false)
         }
-        setGuardant(false)
     }
 
     return (
         <div className="min-h-screen bg-[#FAF8F5] text-stone-800 p-6 font-sans selection:bg-amber-100">
 
-            {/* CAPÇALERA */}
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-stone-200/80 pb-6 mb-6 gap-4">
                 <div>
                     <Link href="/admin" className="text-xs text-stone-500 hover:text-stone-900 font-mono mb-2 block">
@@ -308,7 +309,6 @@ export default function AuthoringTool() {
                 </div>
             </header>
 
-            {/* 🤖 MODAL AI CREATOR */}
             {showAIModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
                     <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
@@ -361,10 +361,8 @@ export default function AuthoringTool() {
                 </div>
             )}
 
-            {/* LLISTA DE CASOS I FORMULARI D'EDICIÓ */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-                {/* LLISTA DE CASOS */}
                 <div className="bg-white border border-stone-200 rounded-xl p-5 h-fit space-y-4 shadow-xs">
                     <h2 className="text-xs font-mono font-medium uppercase tracking-wider text-stone-500">// CASOS EN BBDD ({templates.length})</h2>
 
@@ -397,7 +395,6 @@ export default function AuthoringTool() {
                     )}
                 </div>
 
-                {/* FORMULARI DE DISSENY */}
                 <div className="lg:col-span-2 bg-white border border-stone-200 rounded-xl p-6 space-y-6 shadow-xs">
                     <div>
                         <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">
@@ -416,7 +413,6 @@ export default function AuthoringTool() {
 
                     <form onSubmit={handleGuardarTemplate} className="space-y-6">
 
-                        {/* DADES GENERALS */}
                         <div className="space-y-4 border-b border-stone-100 pb-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
@@ -457,7 +453,6 @@ export default function AuthoringTool() {
                             </div>
                         </div>
 
-                        {/* PESTANYES DE LES 4 MISSIONS */}
                         <div className="space-y-4">
                             <div className="flex border-b border-stone-200 gap-2">
                                 {(['MISION_1', 'MISION_2', 'MISION_3', 'MISION_4'] as const).map((mKey, idx) => (
