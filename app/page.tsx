@@ -70,9 +70,6 @@ export default function SimulacioApp() {
     // 1. Inicialitzem el hook de paràmetres d'URL
     const searchParams = useSearchParams();
 
-    // 2. Localitza on tens l'estat del PIN (segurament es diu pin o similar)
-    const [pin, setPin] = useState('');
-
     // Estats de Missió, Plantilla i Escalabilitat
     const [missioActual, setMissioActual] = useState<string>('MISION_1');
     const [missioConfig, setMissioConfig] = useState<MissionConfig | null>(null);
