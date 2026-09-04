@@ -989,7 +989,7 @@ export default function AdminDashboard() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-stone-200/80 pb-6 mb-6 gap-4 no-print">
         <div>
           <h1 className="text-2xl font-serif font-medium tracking-tight text-stone-900 flex items-center gap-2">
-            🏛️ Synusia Facilitator Operations Panel
+            Tauler del Facilitador
           </h1>
           <p className="text-xs text-stone-500 mt-1">Gestió aïllada multi-tenant per a tallers executius, universitats i entitats públiques.</p>
           <Link

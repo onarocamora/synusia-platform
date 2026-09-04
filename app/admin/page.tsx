@@ -244,7 +244,7 @@ export default function AdminDashboard() {
       setEquipSeleccionat(null)
       setMostrarModalLlançament(false)
 
-      alert(`🎉 Taller llançat amb èxit!\n📂 Cas actiu: [${templateSeleccionada}]\n💸 Crèdit consumit (Saldo restant: ${saldoActual - 1}).\n🎯 PIN d'accés per a l'aula: ${nouPin}`)
+      alert(`🎉 Taller llançat amb èxit!\n📂 Cas actiu: [${templateSeleccionada}]\n💸 Crèdit consumit (Saldo restant: ${saldoActual - 1}).\n🎯 PIN de sala per a l'aula: ${nouPin}`)
 
     } catch (err) {
       console.error(err)
@@ -451,10 +451,10 @@ export default function AdminDashboard() {
         <main className="max-w-md w-full mx-auto my-auto bg-white border border-stone-200/80 rounded-2xl p-8 shadow-sm">
           <div className="mb-8 text-center space-y-2">
             <h1 className="text-2xl font-serif font-medium text-stone-900 tracking-tight">
-              Accés Facilitador
+              Accés per a Facilitadors
             </h1>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Autenticació requerida per accedir al panell de gestió de sessions i telemetria.
+              Inicieu sessió per crear sales, gestionar els equips i fer el seguiment de les simulacions.
             </p>
           </div>
 
@@ -498,7 +498,7 @@ export default function AdminDashboard() {
               disabled={loginLoading}
               className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium py-3 rounded-xl text-sm transition duration-200 disabled:opacity-50 mt-4 shadow-sm cursor-pointer"
             >
-              {loginLoading ? 'Autenticant...' : 'Entrar al Panell →'}
+              {loginLoading ? 'Autenticant...' : 'Accedir al Tauler →'}
             </button>
           </form>
         </main>
@@ -521,22 +521,22 @@ export default function AdminDashboard() {
         <div>
           <h1 className="text-2xl font-serif font-medium tracking-tight text-stone-900 flex items-center gap-3">
             <Image src="/logo.png" alt="Synusia Logo" width={32} height={32} className="object-contain" />
-            Synusia Operations Panel
+            Tauler del facilitador
           </h1>
-          <p className="text-xs text-stone-500 mt-1">Gestió aïllada multi-tenant per a tallers executius, universitats i entitats públiques.</p>
+          <p className="text-xs text-stone-500 mt-1">Gestió de sales, creació de sessions i seguiment de simulacions en temps real</p>
 
           <div className="flex items-center gap-2 mt-3">
             <Link
               href="/admin/templates"
               className="inline-flex items-center gap-1.5 bg-white hover:bg-stone-100 text-stone-700 border border-stone-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-xs"
             >
-              🎨 Gestor de Plantilles / Authoring Tool →
+              Gestor de Simulacions i Plantilles →
             </Link>
             <button
               onClick={handleLogout}
               className="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shadow-xs cursor-pointer"
             >
-              🚪 Tancar Sessió ({session.user?.email})
+              Tancar Sessió ({session.user?.email})
             </button>
           </div>
         </div>
@@ -547,12 +547,12 @@ export default function AdminDashboard() {
             disabled={loading}
             className="bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-2.5 px-4 rounded-lg transition-all shadow-xs disabled:opacity-50 cursor-pointer"
           >
-            {loading ? 'Processant...' : '🚀 Llançar Nova Sessió (-1 Crèdit)'}
+            {loading ? 'Processant...' : '＋ Crear Nova Sessió (-1 Crèdit)'}
           </button>
 
           <input
             type="text"
-            placeholder="PIN D'ACCÉS"
+            placeholder="PIN de sala"
             value={pinSessio}
             onChange={(e) => setPinSessio(e.target.value)}
             className="bg-[#FAF8F5] border border-stone-300 rounded-lg px-3 py-1.5 text-center text-sm font-mono font-bold tracking-widest text-stone-900 focus:outline-none focus:ring-1 focus:ring-stone-400 uppercase w-32"
@@ -561,7 +561,7 @@ export default function AdminDashboard() {
             onClick={() => carregarDadesSessio(pinSessio)}
             className="bg-stone-100 hover:bg-stone-200 border border-stone-300 text-stone-800 font-medium px-4 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
           >
-            Sincronitzar
+            Carregar
           </button>
         </div>
       </header>
@@ -595,7 +595,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-800 leading-relaxed">
-              💸 En confirmar, es descomptarà 1 crèdit del compte del client i es generarà un PIN d'accés únic per a l'aula.
+              En confirmar, es descomptarà 1 crèdit del compte del client i es generarà un PIN de sala únic per sessió.
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

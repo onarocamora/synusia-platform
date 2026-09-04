@@ -382,7 +382,7 @@ export default function SimulacioApp() {
                         <div className="flex justify-center mb-4">
                             <Image src="/logo.png" alt="Synusia Logo" width={140} height={40} priority />
                         </div>
-                        <h1 className="text-2xl font-serif font-medium text-stone-900">Missió 0: Calibra't</h1>
+                        <h1 className="text-2xl font-serif font-medium text-stone-900">Accés a la Missió</h1>
                         <div className="bg-[#FAF8F5] p-3 rounded-xl border border-stone-200 text-xs text-stone-600 italic">
                             Benvinguts/des a la simulació.
                         </div>
@@ -396,7 +396,7 @@ export default function SimulacioApp() {
 
                     <form onSubmit={handleInicialitzar} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-medium text-stone-600 mb-1">PIN d'Accés</label>
+                            <label className="block text-xs font-medium text-stone-600 mb-1">PIN de sala</label>
                             <input
                                 type="text"
                                 required
@@ -439,7 +439,7 @@ export default function SimulacioApp() {
                             disabled={loading}
                             className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3 px-4 rounded-xl transition-all shadow-sm cursor-pointer disabled:opacity-50"
                         >
-                            {loading ? 'Verificant...' : 'Inicialitzar Connexió →'}
+                            {loading ? 'Verificant...' : 'Començar la Simulació →'}
                         </button>
                     </form>
                 </main>
@@ -466,7 +466,7 @@ export default function SimulacioApp() {
                             {faseEnquesta === 'PRE_TEST' ? '📋 Qüestionari Inicial' : '⚖️ Qüestionari Final'}
                         </h2>
                         <p className="text-xs text-stone-500 mt-2 leading-relaxed">
-                            Cada membre de l'equip ha d'escanejar aquest codi QR amb el seu mòbil i respondre el formulari de manera individual.
+                            Agafeu els vostres telèfons mòbils. Cada integrant de l'equip ha d'escanejar aquest QR i respondre el qüestionari.
                         </p>
                     </div>
                     <div className="flex justify-center py-2">
@@ -480,7 +480,7 @@ export default function SimulacioApp() {
                         }}
                         className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-3 px-4 rounded-xl transition-all shadow-sm cursor-pointer"
                     >
-                        Tots els membres hem enviat el formulari →
+                        Ja ho hem respost tots →
                     </button>
                 </div>
             </div>
@@ -601,7 +601,7 @@ export default function SimulacioApp() {
                         <div className="flex flex-col items-start">
                             <span className="text-[11px] font-medium text-stone-400 mb-1 px-1">{missioConfig?.bot_name || 'OmnIA'}</span>
                             <div className="bg-white border border-stone-200 px-4 py-3 rounded-2xl rounded-bl-xs text-xs text-stone-400 italic flex items-center gap-2">
-                                <span className="animate-pulse">●</span> Processant resposta...
+                                <span className="animate-pulse">●</span>Analitzant les dades...
                             </div>
                         </div>
                     )}
@@ -613,7 +613,7 @@ export default function SimulacioApp() {
                         <input
                             type="text"
                             maxLength={2000}
-                            placeholder="Introduïu la teva consulta o criteri per a la IA..."
+                            placeholder="Escriu la teva ordre o pregunta per a la IA..."
                             value={inputMessage}
                             onChange={(e) => setInputMessage(e.target.value)}
                             disabled={isTyping}
@@ -672,18 +672,18 @@ export default function SimulacioApp() {
                             {(missioConfig?.codi_desblocatge || missioConfig?.codi_correcte) && (
                                 <div className="p-4 bg-stone-50 border border-stone-200 rounded-xl space-y-2">
                                     <label className="block text-[10px] font-mono font-semibold text-stone-500 uppercase tracking-wider">
-                                        🔑 Codi de Desblocatge de Fase
+                                        🔑 Clau de seguretat per accedir a la següent missió
                                     </label>
                                     <form onSubmit={handleUnlock} className="flex gap-2">
                                         <input
                                             type="text"
                                             maxLength={50}
-                                            placeholder="Introdueix codi..."
+                                            placeholder="Escriu la paraula clau..."
                                             value={codiUnlock}
                                             onChange={(e) => setCodiUnlock(e.target.value)}
                                             className="flex-1 bg-white border border-stone-300 rounded-lg px-3 py-1.5 text-xs font-mono text-stone-900 uppercase focus:outline-none focus:ring-1 focus:ring-stone-400"
                                         />
-                                        <button type="submit" className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">Validar</button>
+                                        <button type="submit" className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">Desbloquejar</button>
                                     </form>
                                     {errorUnlock && <p className="text-[11px] text-red-600 font-medium mt-1">{errorUnlock}</p>}
                                 </div>
@@ -710,7 +710,7 @@ export default function SimulacioApp() {
                             )}
                         </div>
                         <div className="pt-4 border-t border-stone-100 mt-6">
-                            <button onClick={() => setDossierObert(false)} className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2.5 rounded-xl transition-colors cursor-pointer">Tancar i Tornar al Xat</button>
+                            <button onClick={() => setDossierObert(false)} className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2.5 rounded-xl transition-colors cursor-pointer">Amagar Dossier</button>
                         </div>
                     </aside>
                 </div>

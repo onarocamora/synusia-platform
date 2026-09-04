@@ -351,9 +351,9 @@ export default function Home() {
         <main className="w-full max-w-md space-y-6 bg-white p-8 rounded-2xl border border-stone-200/80 shadow-sm">
           <div className="text-center space-y-2">
             <span className="text-xs font-mono tracking-widest text-stone-400 uppercase">Synusia Platform</span>
-            <h1 className="text-2xl font-serif font-medium text-stone-900">🧩 Missió 0: Calibra't</h1>
+            <h1 className="text-2xl font-serif font-medium text-stone-900">Accés a la Missió</h1>
             <div className="bg-[#FAF8F5] p-3 rounded-xl border border-stone-200 text-xs text-stone-600 italic">
-              Benvinguts a la simulació d'auditoria pedagògica.
+              Introduïu el codi de la sala per accedir a la simulació.
             </div>
           </div>
 
