@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import posthog from 'posthog-js';
-import { useSearchParams } from 'next/navigation';
 
 // ---------------------------------------------------------------------------
 // TYPES & INTERFACES
@@ -52,10 +51,11 @@ const defaultStoryline: DefaultStoryline = {
 };
 
 // ---------------------------------------------------------------------------
-// COMPONENT PRINCIPAL DE LA SIMULACIÓ (SENSE LOGIN)
+// LÒGICA INTERNA DE LA SIMULACIÓ
 // ---------------------------------------------------------------------------
-export default function SimulacioApp() {
+function SimulacioContent() {
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     // Estats globals de la simulació
     const [credits, setCredits] = useState<number | null>(null);
@@ -66,9 +66,6 @@ export default function SimulacioApp() {
 
     // Estats de Qüestionaris via QR Tally
     const [faseEnquesta, setFaseEnquesta] = useState<'CAP' | 'PRE_TEST' | 'POST_TEST'>('CAP');
-
-    // 1. Inicialitzem el hook de paràmetres d'URL
-    const searchParams = useSearchParams();
 
     // Estats de Missió, Plantilla i Escalabilitat
     const [missioActual, setMissioActual] = useState<string>('MISION_1');
@@ -108,12 +105,10 @@ export default function SimulacioApp() {
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
 
-    // 3. Afegim l'Efecte per capturar el paràmetre quan carrega la pàgina
+    // Capturar el paràmetre ?pin=DEMO de la URL
     useEffect(() => {
         const pinDesDeUrl = searchParams.get('pin');
-
         if (pinDesDeUrl) {
-            // El passem a majúscules per seguretat i l'apliquem
             setPin(pinDesDeUrl.toUpperCase());
         }
     }, [searchParams]);
@@ -255,7 +250,6 @@ export default function SimulacioApp() {
                 dada: codiCorrecte
             }]);
 
-            // CANVI: Si és el final, anem directament a redactar l'informe (Sense QR encara)
             if (missioConfig?.seguent_missio === 'FINAL') {
                 setFaseFinal(true);
             } else {
@@ -349,7 +343,6 @@ export default function SimulacioApp() {
                     evidencies_count: evidencies.length,
                 });
 
-                // CANVI: Ara és quan disparem el QR del Post-Test
                 setFaseEnquesta('POST_TEST');
             } else {
                 alert("Hi ha hagut un error en desar l'informe. Torna-ho a intentar.");
@@ -417,7 +410,7 @@ export default function SimulacioApp() {
                                 type="text"
                                 required
                                 maxLength={10}
-                                placeholder="Ex: 1234"
+                                placeholder="Ex: DEMO"
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold text-stone-900 tracking-widest focus:outline-none focus:ring-2 focus:ring-stone-400 uppercase"
@@ -494,7 +487,6 @@ export default function SimulacioApp() {
                         onClick={() => {
                             posthog.capture('survey_completed', { survey_type: faseEnquesta });
 
-                            // CANVI: Si acabem el POST_TEST, marquem l'informe com a enviat perquè surti la pantalla final
                             if (faseEnquesta === 'POST_TEST') {
                                 setInformeEnviat(true);
                             }
@@ -555,9 +547,9 @@ export default function SimulacioApp() {
                                             placeholder={
                                                 `Redacteu aquí les vostres conclusions. Podeu seguir aquesta estructura:
 
-                                                1. Quin és el risc o problema principal que heu detectat en aquest cas?
-                                                2. Quines vulnerabilitats heu trobat en els models (biaixos, manca de dades, errors de lògica,...)?
-                                                3. Quina decisió final preneu? L'IA pot continuar operant o s'ha d'aturar i reenfocar? Argumenteu-ho.`
+1. Quin és el risc o problema principal que heu detectat en aquest cas?
+2. Quines vulnerabilitats heu trobat en els models (biaixos, manca de dades, errors de lògica,...)?
+3. Quina decisió final preneu? L'IA pot continuar operant o s'ha d'aturar i reenfocar? Argumenteu-ho.`
                                             }
                                             className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none whitespace-pre-wrap"
                                         />
@@ -585,10 +577,10 @@ export default function SimulacioApp() {
                                     </p>
                                 </div>
 
-                                {/* 1. CONVERSIÓ B2B (CRIDA A L'ACCIÓ PRINCIPAL) */}
+                                {/* 1. CONVERSIÓ B2B */}
                                 <div className="pt-4 w-full max-w-md mx-auto space-y-2">
                                     <a
-                                        href="https://calendar.app.google/PsYN19cM3PNzqbkD6" // 👈 Substitueix pel teu enllaç de Calendly
+                                        href="https://calendar.app.google/PsYN19cM3PNzqbkD6"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="w-full flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3.5 px-4 rounded-xl transition-all shadow-md cursor-pointer"
@@ -600,13 +592,12 @@ export default function SimulacioApp() {
                                     </p>
                                 </div>
 
-                                {/* 2. VIRALITAT I DIFUSIÓ (WHATSAPP + SOCIALS) */}
+                                {/* 2. VIRALITAT I DIFUSIÓ */}
                                 <div className="pt-6 w-full max-w-md mx-auto space-y-4 border-t border-stone-100">
                                     <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block">
                                         Comparteix l'experiència
                                     </span>
 
-                                    {/* BOTÓ PRINCIPAL DE WHATSAPP */}
                                     <button
                                         onClick={() => {
                                             const text = encodeURIComponent(
@@ -622,7 +613,6 @@ export default function SimulacioApp() {
                                         Compartir per WhatsApp
                                     </button>
 
-                                    {/* XARXES SOCIALS I WEB SECUNDÀRIES */}
                                     <div className="grid grid-cols-3 gap-2 pt-1">
                                         <a
                                             href="https://linkedin.com/showcase/synusia-io"
@@ -825,5 +815,20 @@ export default function SimulacioApp() {
                 </div>
             )}
         </div>
+    );
+}
+
+// ---------------------------------------------------------------------------
+// EXPORTACIÓ PRINCIPAL AMB EMBOLCALL SUSPENSE
+// ---------------------------------------------------------------------------
+export default function SimulacioApp() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center font-serif text-stone-400 text-xs">
+                Carregant entorn de simulació...
+            </div>
+        }>
+            <SimulacioContent />
+        </Suspense>
     );
 }
