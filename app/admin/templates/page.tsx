@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import posthog from 'posthog-js'
 import Link from 'next/link'
 import Image from 'next/image'
 
@@ -195,6 +196,10 @@ export default function AuthoringTool() {
     }
 
     const duplicarTemplate = (tmpl: PedagogicalTemplate) => {
+        posthog.capture('template_duplicated', {
+            source_template_id: tmpl.id_template,
+            is_official: !!tmpl.is_official,
+        })
         setEsEdicio(false)
         setIsOfficialSelected(false)
         setIdTemplate(`${tmpl.id_template}_CUSTOM`)
@@ -226,6 +231,10 @@ export default function AuthoringTool() {
             if (data.error) {
                 alert(`❌ Error al generador de IA: ${data.error}`);
             } else {
+                posthog.capture('template_ai_generated', {
+                    sector: aiSectorInput,
+                    template_id: data.id_template,
+                });
                 setEsEdicio(false);
                 setIsOfficialSelected(false);
                 setIdTemplate(data.id_template || generarCodiCurt());
@@ -289,6 +298,10 @@ export default function AuthoringTool() {
             if (error) {
                 setMissatge(`❌ Error en desar: ${error.message}`)
             } else {
+                posthog.capture('template_saved', {
+                    template_id: idTemplate.toUpperCase(),
+                    is_new: !esEdicio,
+                })
                 setMissatge(`✅ Cas [${idTemplate.toUpperCase()}] desat amb èxit.`)
                 carregarPlantilles()
                 setEsEdicio(true)

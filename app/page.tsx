@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import posthog from 'posthog-js';
 
 // ---------------------------------------------------------------------------
 // TYPES & INTERFACES
@@ -77,7 +78,6 @@ export default function SimulacioApp() {
     const [errorUnlock, setErrorUnlock] = useState<string>('');
 
     // Estats del formulari d'entrada
-    const [welcomeMessage, setWelcomeMessage] = useState<string>('Connectant amb el flux d’OmnIA...');
     const [pin, setPin] = useState<string>('');
     const [nomsEquip, setNomsEquip] = useState<string>('');
     const [riscIA, setRiscIA] = useState<string>('');
@@ -96,37 +96,20 @@ export default function SimulacioApp() {
     const [informeText, setInformeText] = useState<string>('');
     const [informeEnviat, setInformeEnviat] = useState<boolean>(false);
 
-    // Control de Temps
-    const [tempsRestant, setTempsRestant] = useState<number>(4200);
-    const TEMPS_TOTAL = 4200;
-
-    const pctTempsGastat = Math.min(((TEMPS_TOTAL - tempsRestant) / TEMPS_TOTAL) * 100, 100);
-
-    const llistaMissions = ['MISION_1', 'MISION_2', 'MISION_3', 'MISION_4'];
-    const totalMissions = llistaMissions.length;
-    const indexLlista = llistaMissions.indexOf(missioActual);
-    const indexMissioActual = indexLlista >= 0 ? indexLlista + 1 : 1;
+    // Control de Temps (Cronòmetre cap endavant)
+    const [tempsTranscorregut, setTempsTranscorregut] = useState<number>(0);
 
     const [sessioFinalitzada, setSessioFinalitzada] = useState<boolean>(false);
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
 
-    // Temporitzador
+    // Temporitzador (Cronòmetre cap endavant)
     useEffect(() => {
         if (!enviat || faseFinal) return;
-
         const interval = setInterval(() => {
-            setTempsRestant(prev => {
-                if (prev <= 1) {
-                    setFaseFinal(true);
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
+            setTempsTranscorregut(prev => prev + 1);
         }, 1000);
-
         return () => clearInterval(interval);
     }, [enviat, faseFinal]);
 
@@ -157,7 +140,7 @@ export default function SimulacioApp() {
         };
     }, [pin, enviat]);
 
-    // 🎯 CARREGAR MISSIÓ (DINÀMIC I VINCULAT A LA PLANTILLA DE LA SESSIÓ)
+    // 🎯 CARREGAR MISSIÓ
     const carregarMissio = async (idMissio: string, templateIdParam?: string) => {
         try {
             const targetTemplate = templateIdParam || idTemplateSessio || 'CAS_OMNIA_2026';
@@ -225,6 +208,11 @@ export default function SimulacioApp() {
 
                 await carregarMissio('MISION_1', templateCas);
 
+                posthog.capture('session_joined', {
+                    template_id: templateCas,
+                    mission_start: 'MISION_1',
+                });
+
                 setFaseEnquesta('PRE_TEST');
                 setEnviat(true);
             }
@@ -235,7 +223,7 @@ export default function SimulacioApp() {
         }
     };
 
-    // Validar Codi
+    // Validar Codi de Desbloqueig
     const handleUnlock = (e: React.FormEvent) => {
         e.preventDefault();
         if (!codiUnlock.trim()) return;
@@ -244,12 +232,17 @@ export default function SimulacioApp() {
         const codiCorrecte = (missioConfig?.codi_desblocatge || missioConfig?.codi_correcte)?.toUpperCase();
 
         if (codiIntroduit === codiCorrecte) {
+            posthog.capture('mission_unlocked', {
+                mission_id: missioActual,
+                next_mission: missioConfig?.seguent_missio || 'FINAL',
+            });
             setEvidencies(prev => [...prev, {
                 titol: missioConfig?.titol || 'Dada Extreta',
                 dada: codiCorrecte
             }]);
+
+            // CANVI: Si és el final, anem directament a redactar l'informe (Sense QR encara)
             if (missioConfig?.seguent_missio === 'FINAL') {
-                setFaseEnquesta('POST_TEST');
                 setFaseFinal(true);
             } else {
                 carregarMissio(missioConfig?.seguent_missio || 'MISION_2');
@@ -259,7 +252,7 @@ export default function SimulacioApp() {
         }
     };
 
-    // Enviar Missatge
+    // Enviar Missatge al Xat
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputMessage.trim() || isTyping) return;
@@ -269,6 +262,11 @@ export default function SimulacioApp() {
         const nousMissatges: Message[] = [...messages, { role: 'user', content: userMessageText }];
         setMessages(nousMissatges);
         setIsTyping(true);
+
+        posthog.capture('chat_message_sent', {
+            mission_id: missioActual,
+            message_length: userMessageText.length,
+        });
 
         try {
             const resposta = await fetch('/api/chat', {
@@ -332,7 +330,13 @@ export default function SimulacioApp() {
                 .eq('id_equip', idEquip);
 
             if (!error) {
-                setInformeEnviat(true);
+                posthog.capture('final_report_submitted', {
+                    report_length: informeText.length,
+                    evidencies_count: evidencies.length,
+                });
+
+                // CANVI: Ara és quan disparem el QR del Post-Test
+                setFaseEnquesta('POST_TEST');
             } else {
                 alert("Hi ha hagut un error en desar l'informe. Torna-ho a intentar.");
             }
@@ -348,7 +352,7 @@ export default function SimulacioApp() {
     };
 
     // ---------------------------------------------------------------------------
-    // VISTA: SESSIÓ FINALITZADA (BLOQUEIG)
+    // VISTA: SESSIÓ FINALITZADA PER ADMIN (BLOQUEIG)
     // ---------------------------------------------------------------------------
     if (sessioFinalitzada) {
         return (
@@ -356,9 +360,7 @@ export default function SimulacioApp() {
                 <div className="max-w-md w-full bg-white border border-stone-200 p-8 rounded-2xl text-center space-y-6 shadow-sm">
                     <div className="text-3xl">🔒</div>
                     <div className="space-y-2">
-                        <h1 className="text-lg font-serif font-medium text-stone-900">
-                            Sessió Finalitzada
-                        </h1>
+                        <h1 className="text-lg font-serif font-medium text-stone-900">Sessió Finalitzada</h1>
                         <p className="text-xs text-stone-500 leading-relaxed">
                             El facilitador ha donat per tancada la sessió. Les connexions amb la plataforma Synusia han estat arxivades.
                         </p>
@@ -372,7 +374,7 @@ export default function SimulacioApp() {
     }
 
     // ---------------------------------------------------------------------------
-    // VISTA: ENTRADA (PORTADA / MISSIÓ 0 - DEMANA EL PIN)
+    // VISTA: ENTRADA (PORTADA / DEMANA EL PIN)
     // ---------------------------------------------------------------------------
     if (!enviat) {
         return (
@@ -457,16 +459,16 @@ export default function SimulacioApp() {
 
         return (
             <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex items-center justify-center p-6 font-sans">
-                <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-stone-200/80 shadow-sm text-center space-y-6">
+                <div className="max-w-md w-full bg-white p-8 rounded-2xl border border-stone-200/80 shadow-sm text-center space-y-6 animate-fade-in">
                     <div>
                         <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block mb-1">
                             {faseEnquesta} // ENQUESTA INDIVIDUAL
                         </span>
                         <h2 className="text-xl font-serif font-medium text-stone-900">
-                            {faseEnquesta === 'PRE_TEST' ? '📋 Qüestionari Inicial' : '⚖️ Qüestionari Final'}
+                            {faseEnquesta === 'PRE_TEST' ? '📋 Qüestionari Inicial' : '⚖️ Valoració de l\'Experiència'}
                         </h2>
                         <p className="text-xs text-stone-500 mt-2 leading-relaxed">
-                            Agafeu els vostres telèfons mòbils. Cada integrant de l'equip ha d'escanejar aquest QR i respondre el qüestionari.
+                            Agafeu els vostres telèfons mòbils. Cada integrant de l'equip ha d'escanejar aquest QR i respondre el breu qüestionari.
                         </p>
                     </div>
                     <div className="flex justify-center py-2">
@@ -476,6 +478,12 @@ export default function SimulacioApp() {
                     </div>
                     <button
                         onClick={() => {
+                            posthog.capture('survey_completed', { survey_type: faseEnquesta });
+
+                            // CANVI: Si acabem el POST_TEST, marquem l'informe com a enviat perquè surti la pantalla final
+                            if (faseEnquesta === 'POST_TEST') {
+                                setInformeEnviat(true);
+                            }
                             setFaseEnquesta('CAP');
                         }}
                         className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-3 px-4 rounded-xl transition-all shadow-sm cursor-pointer"
@@ -488,12 +496,14 @@ export default function SimulacioApp() {
     }
 
     // ---------------------------------------------------------------------------
-    // VISTA: INFORME FINAL
+    // VISTA: INFORME FINAL I PANTALLA D'ÈXIT
     // ---------------------------------------------------------------------------
     if (faseFinal) {
         return (
-            <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-6 font-sans">
+            <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-6 font-sans animate-fade-in">
                 <div className="w-full max-w-5xl bg-white shadow-sm rounded-2xl border border-stone-200/80 flex flex-col md:flex-row overflow-hidden">
+
+                    {/* ESQUERRA: EVIDÈNCIES */}
                     <div className="w-full md:w-1/3 bg-[#FAF8F5] border-b md:border-b-0 md:border-r border-stone-200 p-6 flex flex-col">
                         <div className="border-b border-stone-200 pb-4 mb-6">
                             <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">Resum de Treball</span>
@@ -511,39 +521,83 @@ export default function SimulacioApp() {
                             ))}
                         </div>
                     </div>
+
+                    {/* DRETA: REDACCIÓ DE L'INFORME O PANTALLA D'ÈXIT FINAL */}
                     <div className="w-full md:w-2/3 p-8 flex flex-col justify-between">
-                        <div>
-                            <div className="flex items-center justify-between border-b border-stone-100 pb-4 mb-6">
+                        {!informeEnviat ? (
+                            <>
                                 <div>
-                                    <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">Fase Final</span>
-                                    <h1 className="text-xl font-serif font-medium text-stone-900">Dictamen Pericial</h1>
+                                    <div className="flex items-center justify-between border-b border-stone-100 pb-4 mb-6">
+                                        <div>
+                                            <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">Fase Final</span>
+                                            <h1 className="text-xl font-serif font-medium text-stone-900">Dictamen Pericial</h1>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <textarea
+                                            value={informeText}
+                                            maxLength={5000}
+                                            onChange={(e) => setInformeText(e.target.value)}
+                                            placeholder="Inicieu la redacció del dictamen final aquí de manera col·legiada..."
+                                            className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none"
+                                        />
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={handleEnviarInforme}
+                                    disabled={!informeText.trim()}
+                                    className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3 px-4 rounded-xl transition-all shadow-sm disabled:opacity-40 cursor-pointer mt-6"
+                                >
+                                    Signar i Enviar Dictamen Final
+                                </button>
+                            </>
+                        ) : (
+                            /* PANTALLA D'ÈXIT FINAL I XARXES SOCIALS */
+                            <div className="py-12 flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in">
+                                <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-4xl mx-auto border border-emerald-100 shadow-sm">
+                                    ✓
+                                </div>
+                                <div className="space-y-2">
+                                    <h2 className="text-2xl font-serif font-medium text-stone-900">Simulació Completada</h2>
+                                    <p className="text-sm text-stone-500 max-w-sm mx-auto leading-relaxed">
+                                        L'auditoria s'ha registrat amb èxit als nostres servidors. Moltes gràcies per l'esforç de l'equip.
+                                    </p>
+                                </div>
+
+                                <div className="pt-8 w-full max-w-sm mx-auto space-y-4">
+                                    <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase border-t border-stone-100 pt-6 block">
+                                        Comparteix l'experiència
+                                    </span>
+                                    <div className="flex flex-col sm:flex-row justify-center gap-3">
+                                        <a
+                                            href="https://linkedin.com/showcase/synusia-io"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center gap-2 bg-[#0077b5] text-white px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-[#006396] transition-colors"
+                                        >
+                                            <Image src="/linkedin.svg" alt="LinkedIn" width={14} height={14} className="brightness-0 invert" />
+                                            LinkedIn
+                                        </a>
+                                        <a
+                                            href="https://instagram.com/synusia.io"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-xl text-xs font-medium hover:opacity-90 transition-opacity"
+                                        >
+                                            <Image src="/instagram.svg" alt="Instagram" width={14} height={14} className="brightness-0 invert" />
+                                            Instagram
+                                        </a>
+                                        <a
+                                            href="https://synusia.io"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex items-center justify-center gap-2 bg-stone-100 text-stone-800 border border-stone-200 px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-stone-200 transition-colors"
+                                        >
+                                            🌐 Web
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
-                            {!informeEnviat ? (
-                                <div className="space-y-4">
-                                    <textarea
-                                        value={informeText}
-                                        maxLength={5000}
-                                        onChange={(e) => setInformeText(e.target.value)}
-                                        placeholder="Inicieu la redacció del dictamen final aquí..."
-                                        className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none"
-                                    />
-                                </div>
-                            ) : (
-                                <div className="py-12 text-center space-y-4">
-                                    <div className="w-16 h-16 bg-stone-100 text-stone-800 rounded-full flex items-center justify-center text-2xl mx-auto border border-stone-200">✓</div>
-                                    <h2 className="text-lg font-serif font-medium text-stone-900">Dictamen Registrat</h2>
-                                </div>
-                            )}
-                        </div>
-                        {!informeEnviat && (
-                            <button
-                                onClick={handleEnviarInforme}
-                                disabled={!informeText.trim()}
-                                className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3 px-4 rounded-xl transition-all shadow-sm disabled:opacity-40 cursor-pointer mt-6"
-                            >
-                                Signar i Enviar Dictamen Final
-                            </button>
                         )}
                     </div>
                 </div>
@@ -570,7 +624,7 @@ export default function SimulacioApp() {
                             ⚡ Crèdits: <strong className="text-stone-900">{credits ?? '—'}</strong>
                         </span>
                         <span className="text-xs font-mono text-stone-600 bg-white px-2.5 py-1 rounded-md border border-stone-200/80 shadow-xs">
-                            ⏱️ {formatarTemps(tempsRestant)}
+                            ⏱️ {formatarTemps(tempsTranscorregut)}
                         </span>
                         <button
                             onClick={() => setDossierObert(!dossierObert)}
