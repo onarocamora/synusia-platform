@@ -538,13 +538,13 @@ export default function SimulacioApp() {
                                             value={informeText}
                                             maxLength={5000}
                                             onChange={(e) => setInformeText(e.target.value)}
-                                            placeholder={`[REDACCIÓ DE L'INFORME HUMÀ ]
+                                            placeholder={
+                                                `Redacteu aquí les vostres conclusions. Podeu seguir aquesta estructura:
 
-                                        Redacteu aquí les vostres conclusions. Podeu seguir aquesta estructura:
-
-                                        1. Quin és el risc o problema principal que heu detectat en aquest cas?
-                                        2. Quines vulnerabilitats heu trobat en els models (biaixos, manca de dades, errors de lògica,...)?
-                                        3. Quina decisió final preneu? L'IA pot continuar operant o s'ha d'aturar i reenfocar? Argumenteu-ho.`}
+                                                1. Quin és el risc o problema principal que heu detectat en aquest cas?
+                                                2. Quines vulnerabilitats heu trobat en els models (biaixos, manca de dades, errors de lògica,...)?
+                                                3. Quina decisió final preneu? L'IA pot continuar operant o s'ha d'aturar i reenfocar? Argumenteu-ho.`
+                                            }
                                             className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none whitespace-pre-wrap"
                                         />
                                     </div>
@@ -574,15 +574,15 @@ export default function SimulacioApp() {
                                 {/* 1. CONVERSIÓ B2B (CRIDA A L'ACCIÓ PRINCIPAL) */}
                                 <div className="pt-4 w-full max-w-md mx-auto space-y-2">
                                     <a
-                                        href="https://calendly.com/EL_TEU_ENLLAÇ" // 👈 Substitueix pel teu enllaç de Calendly
+                                        href="https://calendar.app.google/PsYN19cM3PNzqbkD6" // 👈 Substitueix pel teu enllaç de Calendly
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="w-full flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3.5 px-4 rounded-xl transition-all shadow-md cursor-pointer"
                                     >
-                                        📅 Reservar una reunió de disseny per a la meva organització
+                                        📅 Reservar una reunió
                                     </a>
                                     <p className="text-[11px] text-stone-400">
-                                        Vols implementar una simulació personalitzada per a la teva organització?
+                                        Vols implementar una simulació per al teu equip o organització?
                                     </p>
                                 </div>
 
