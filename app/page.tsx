@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import posthog from 'posthog-js';
+import { useSearchParams } from 'next/navigation';
 
 // ---------------------------------------------------------------------------
 // TYPES & INTERFACES
@@ -66,6 +67,12 @@ export default function SimulacioApp() {
     // Estats de Qüestionaris via QR Tally
     const [faseEnquesta, setFaseEnquesta] = useState<'CAP' | 'PRE_TEST' | 'POST_TEST'>('CAP');
 
+    // 1. Inicialitzem el hook de paràmetres d'URL
+    const searchParams = useSearchParams();
+
+    // 2. Localitza on tens l'estat del PIN (segurament es diu pin o similar)
+    const [pin, setPin] = useState('');
+
     // Estats de Missió, Plantilla i Escalabilitat
     const [missioActual, setMissioActual] = useState<string>('MISION_1');
     const [missioConfig, setMissioConfig] = useState<MissionConfig | null>(null);
@@ -103,6 +110,16 @@ export default function SimulacioApp() {
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
+
+    // 3. Afegim l'Efecte per capturar el paràmetre quan carrega la pàgina
+    useEffect(() => {
+        const pinDesDeUrl = searchParams.get('pin');
+
+        if (pinDesDeUrl) {
+            // El passem a majúscules per seguretat i l'apliquem
+            setPin(pinDesDeUrl.toUpperCase());
+        }
+    }, [searchParams]);
 
     // Temporitzador (Cronòmetre cap endavant)
     useEffect(() => {
