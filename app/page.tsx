@@ -465,10 +465,10 @@ export default function SimulacioApp() {
                             {faseEnquesta} // ENQUESTA INDIVIDUAL
                         </span>
                         <h2 className="text-xl font-serif font-medium text-stone-900">
-                            {faseEnquesta === 'PRE_TEST' ? '📋 Qüestionari Inicial' : '⚖️ Valoració de l\'Experiència'}
+                            {faseEnquesta === 'PRE_TEST' ? 'Qüestionari Inicial' : 'Valoració de l\'Experiència'}
                         </h2>
                         <p className="text-xs text-stone-500 mt-2 leading-relaxed">
-                            Agafeu els vostres telèfons mòbils. Cada integrant de l'equip ha d'escanejar aquest QR i respondre el breu qüestionari.
+                            Cada usuari o membre de l'equip ha d'escanejar aquest QR i respondre el qüestionari.
                         </p>
                     </div>
                     <div className="flex justify-center py-2">
@@ -488,7 +488,7 @@ export default function SimulacioApp() {
                         }}
                         className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-3 px-4 rounded-xl transition-all shadow-sm cursor-pointer"
                     >
-                        Ja ho hem respost tots →
+                        Confirmar finalització del qüestionari →
                     </button>
                 </div>
             </div>
@@ -530,7 +530,7 @@ export default function SimulacioApp() {
                                     <div className="flex items-center justify-between border-b border-stone-100 pb-4 mb-6">
                                         <div>
                                             <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">Fase Final</span>
-                                            <h1 className="text-xl font-serif font-medium text-stone-900">Dictamen Pericial</h1>
+                                            <h1 className="text-xl font-serif font-medium text-stone-900">Redacció de l'informe humà</h1>
                                         </div>
                                     </div>
                                     <div className="space-y-4">
@@ -538,8 +538,14 @@ export default function SimulacioApp() {
                                             value={informeText}
                                             maxLength={5000}
                                             onChange={(e) => setInformeText(e.target.value)}
-                                            placeholder="Inicieu la redacció del dictamen final aquí de manera col·legiada..."
-                                            className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none"
+                                            placeholder={`[REDACCIÓ DE L'INFORME HUMÀ ]
+
+                                        Redacteu aquí les vostres conclusions. Podeu seguir aquesta estructura:
+
+                                        1. Quin és el risc o problema principal que heu detectat en aquest cas?
+                                        2. Quines vulnerabilitats heu trobat en els models (biaixos, manca de dades, errors de lògica,...)?
+                                        3. Quina decisió final preneu? L'IA pot continuar operant o s'ha d'aturar i reenfocar? Argumenteu-ho.`}
+                                            className="w-full h-64 p-4 border border-stone-200 rounded-xl bg-[#FAF8F5] focus:bg-white focus:outline-none focus:ring-1 focus:ring-stone-400 text-stone-800 text-xs leading-relaxed resize-none whitespace-pre-wrap"
                                         />
                                     </div>
                                 </div>
@@ -548,50 +554,85 @@ export default function SimulacioApp() {
                                     disabled={!informeText.trim()}
                                     className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3 px-4 rounded-xl transition-all shadow-sm disabled:opacity-40 cursor-pointer mt-6"
                                 >
-                                    Signar i Enviar Dictamen Final
+                                    Signar i Enviar Informe
                                 </button>
                             </>
                         ) : (
-                            /* PANTALLA D'ÈXIT FINAL I XARXES SOCIALS */
-                            <div className="py-12 flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in">
+                            /* PANTALLA D'ÈXIT FINAL, CONVERSIÓ B2B I XARXES SOCIALS */
+                            <div className="py-8 flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in">
                                 <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-4xl mx-auto border border-emerald-100 shadow-sm">
                                     ✓
                                 </div>
+
                                 <div className="space-y-2">
                                     <h2 className="text-2xl font-serif font-medium text-stone-900">Simulació Completada</h2>
                                     <p className="text-sm text-stone-500 max-w-sm mx-auto leading-relaxed">
-                                        L'auditoria s'ha registrat amb èxit als nostres servidors. Moltes gràcies per l'esforç de l'equip.
+                                        L'informe s'ha registrat correctament. Ara pots compartir la teva experiència amb els teus companys o a les xarxes socials.
                                     </p>
                                 </div>
 
-                                <div className="pt-8 w-full max-w-sm mx-auto space-y-4">
-                                    <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase border-t border-stone-100 pt-6 block">
+                                {/* 1. CONVERSIÓ B2B (CRIDA A L'ACCIÓ PRINCIPAL) */}
+                                <div className="pt-4 w-full max-w-md mx-auto space-y-2">
+                                    <a
+                                        href="https://calendly.com/EL_TEU_ENLLAÇ" // 👈 Substitueix pel teu enllaç de Calendly
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="w-full flex items-center justify-center gap-2 bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-3.5 px-4 rounded-xl transition-all shadow-md cursor-pointer"
+                                    >
+                                        📅 Reservar una reunió de disseny per a la meva organització
+                                    </a>
+                                    <p className="text-[11px] text-stone-400">
+                                        Vols implementar una simulació personalitzada per a la teva organització?
+                                    </p>
+                                </div>
+
+                                {/* 2. VIRALITAT I DIFUSIÓ (WHATSAPP + SOCIALS) */}
+                                <div className="pt-6 w-full max-w-md mx-auto space-y-4 border-t border-stone-100">
+                                    <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block">
                                         Comparteix l'experiència
                                     </span>
-                                    <div className="flex flex-col sm:flex-row justify-center gap-3">
+
+                                    {/* BOTÓ PRINCIPAL DE WHATSAPP */}
+                                    <button
+                                        onClick={() => {
+                                            const text = encodeURIComponent(
+                                                `🚀 L'equip "${nomsEquip}" acaba de completar la simulació d'IA a Synusia! \n\nHem aconseguit gestionar els agents amb èxit i enviar l'informe final.\n\nAcceptes el repte? Prova la demo express aquí (PIN: DEMO):\nhttps://app.synusia.io`
+                                            );
+                                            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+                                        }}
+                                        className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#20bd5a] text-white font-medium text-xs py-3 px-4 rounded-xl transition-all shadow-sm cursor-pointer"
+                                    >
+                                        <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                            <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981z" />
+                                        </svg>
+                                        Compartir per WhatsApp
+                                    </button>
+
+                                    {/* XARXES SOCIALS I WEB SECUNDÀRIES */}
+                                    <div className="grid grid-cols-3 gap-2 pt-1">
                                         <a
                                             href="https://linkedin.com/showcase/synusia-io"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center justify-center gap-2 bg-[#0077b5] text-white px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-[#006396] transition-colors"
+                                            className="flex items-center justify-center gap-1.5 bg-[#0077b5] text-white px-3 py-2 rounded-xl text-[11px] font-medium hover:bg-[#006396] transition-colors"
                                         >
-                                            <Image src="/linkedin.svg" alt="LinkedIn" width={14} height={14} className="brightness-0 invert" />
+                                            <Image src="/linkedin.svg" alt="LinkedIn" width={12} height={12} className="brightness-0 invert" />
                                             LinkedIn
                                         </a>
                                         <a
                                             href="https://instagram.com/synusia.io"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center justify-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2.5 rounded-xl text-xs font-medium hover:opacity-90 transition-opacity"
+                                            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-2 rounded-xl text-[11px] font-medium hover:opacity-90 transition-opacity"
                                         >
-                                            <Image src="/instagram.svg" alt="Instagram" width={14} height={14} className="brightness-0 invert" />
+                                            <Image src="/instagram.svg" alt="Instagram" width={12} height={12} className="brightness-0 invert" />
                                             Instagram
                                         </a>
                                         <a
                                             href="https://synusia.io"
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="flex items-center justify-center gap-2 bg-stone-100 text-stone-800 border border-stone-200 px-4 py-2.5 rounded-xl text-xs font-medium hover:bg-stone-200 transition-colors"
+                                            className="flex items-center justify-center gap-1.5 bg-stone-100 text-stone-800 border border-stone-200 px-3 py-2 rounded-xl text-[11px] font-medium hover:bg-stone-200 transition-colors"
                                         >
                                             🌐 Web
                                         </a>

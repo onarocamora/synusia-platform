@@ -54,14 +54,19 @@ interface TemplateData {
   };
 }
 
-// Guardrail d'Entrada (Pre-LLM)
+// Guardrail d'Entrada (Versió Relaxada)
 function checkVagueness(text: string): boolean {
   const clean = text.toLowerCase().trim();
-  const tokens = clean.split(/\s+/).filter(t => t.length > 2);
-  const vagueTriggers = ['explica', 'què passa', 'que passa', 'detalls', 'informa', 'resumeix', 'què saps', 'caca', 'hola', 'qui ets'];
 
-  if (clean.length < 4 || tokens.length < 3) return true;
-  if (vagueTriggers.some(trigger => clean.includes(trigger)) && tokens.length < 6) return true;
+  // 1. Bloquejar missatges completament buits o d'1 sola lletra
+  if (clean.length < 2) return true;
+
+  // 2. Bloquejar només spam pur o paraules brossa aïllades
+  // (Si escriuen només "caca", no gastem tokens en OpenAI)
+  const spamTriggers = ['caca', 'asdf', 'test'];
+  if (spamTriggers.includes(clean)) return true;
+
+  // Deixem passar la resta! Prompts curts, directes i tàctics ara són vàlids.
   return false;
 }
 
@@ -160,7 +165,7 @@ export async function POST(request: NextRequest) {
 
     // 3. EXECUCIÓ DE GUARDRAIL PREVI (VAGUEA)
     if (checkVagueness(inputUsuari)) {
-      const vagueReply = "⚠️ ACCÉS DENEGAT: Sintaxi no reconeguda o entrada massa vaga. Consulteu l'Evidència Física en Paper per estructurar una comanda vàlida.";
+      const vagueReply = "La teva petició és massa vaga per poder respondre-la.";
       const latencyMs = Date.now() - startTime;
 
       // A) Registre a logs_interaccio (actor MUST be 'USER' or 'ARIA')
