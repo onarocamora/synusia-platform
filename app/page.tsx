@@ -42,10 +42,50 @@ interface DefaultStoryline {
 const defaultStoryline: DefaultStoryline = {
     config_missions: {
         missions: {
-            'MISION_1': { titol: "Fase 1: Filtre de Sintaxi", codi_correcte: "ESTRUCTURA", codi_desblocatge: "ESTRUCTURA", seguent_missio: "MISION_2", consell: "Examineu l'Evidència #1 en paper i tatxeu la PII.", repte: "Formular un prompt anònim amb ROL i TIPUS D’ACCÉS sense dades privades.", objectius: ["Anònimitzar el registre de la taula", "Obtenir la clau ESTRUCTURA"], welcome_message: "OmnIA - LOG v4.1 actiu. Indiqueu el criteri de cerca filtrat.", bot_name: "OmnIA - LOG" },
-            'MISION_2': { titol: "Fase 2: Audit Mètric", codi_correcte: "EVIDENCIA", codi_desblocatge: "EVIDENCIA", seguent_missio: "MISION_3", consell: "Apliqueu la fórmula del paper a les 5 fraccions.", repte: "Exigir format de taula i auditar la mitjana ponderada de latència.", objectius: ["Demostrar la mitjana real de 18.8 min", "Obtenir la clau EVIDENCIA"], welcome_message: "OmnIA - DATA v4.1 connectat. Dades en brut carregades.", bot_name: "OmnIA - DATA" },
-            'MISION_3': { titol: "Fase 3: Refutació Dialèctica", codi_correcte: "CONFIANÇA", codi_desblocatge: "CONFIANÇA", seguent_missio: "MISION_4", consell: "Trianguleu el Contracte SLA-4 amb l'Informe Forense.", repte: "Demostrar que la Condició 3.1 d'aturada cardíaca anul·la l'SLA-4.", objectius: ["Desactivar la clàusula SLA-4", "Obtenir la clau CONFIANÇA"], welcome_message: "OmnIA - LEX v4.1 actiu. Quina prova contractual teniu?", bot_name: "OmnIA - LEX" },
-            'MISION_4': { titol: "Fase 4: Anàlisi de Biaix", codi_correcte: "INTEGRITAT", codi_desblocatge: "INTEGRITAT", seguent_missio: "FINAL", consell: "Calculeu el pes del Score al codi font en paper.", repte: "Localitzar PROTECT_REPUTATION i redactar l'informe a mà.", objectius: ["Identificar la variable de biaix", "Completar la Pàgina 6 del Dossier en paper"], welcome_message: "OmnIA - OBSERVA v4.1 actiu. Calculeu l'arbre de decisió del codi.", bot_name: "OmnIA - OBSERVA" }
+            'MISION_1': {
+                titol: "Fase 1: Privacitat i Protecció de Dades",
+                bot_name: "Auditoria de Seguretat",
+                codi_correcte: "ESTRUCTURA",
+                codi_desblocatge: "ESTRUCTURA",
+                seguent_missio: "MISION_2",
+                consell: "Reviseu el document d'Evidència #1 i assegureu-vos de no incloure dades personals (PII).",
+                repte: "Formular una petició d'accés indicant el rol i el tipus de permissos sense incloure dades privades.",
+                objectius: ["Anonimitzar el registre de sol·licitud", "Obtenir el codi de validació ESTRUCTURA"],
+                welcome_message: "Mòdul de seguretat actiu. Indiqueu els criteris de cerca per a la revisió.",
+            },
+            'MISION_2': {
+                titol: "Fase 2: Auditoria de Mètriques i Rendiment",
+                bot_name: "Anàlisi de Dades",
+                codi_correcte: "EVIDENCIA",
+                codi_desblocatge: "EVIDENCIA",
+                seguent_missio: "MISION_3",
+                consell: "Verifiqueu la fórmula de càlcul amb les dades de la taula de latència.",
+                repte: "Sol·licitar l'organització de les dades en format taula i auditar la mitjana real de latència.",
+                objectius: ["Verificar el temps mitjà de resposta (18.8 minuts)", "Obtenir el codi de validació EVIDENCIA"],
+                welcome_message: "Mòdul d'anàlisi de dades connectat. Dades en brut disponibles per a consulta.",
+            },
+            'MISION_3': {
+                titol: "Fase 3: Revisió Normativa i Contractual",
+                bot_name: "Assessoria Jurídica",
+                codi_correcte: "CONFIANÇA",
+                codi_desblocatge: "CONFIANÇA",
+                seguent_missio: "MISION_4",
+                consell: "Contrasteu les clàusules del contracte SLA-4 amb les dades de l'informe tècnic.",
+                repte: "Demostrar que la condició d'aturada d'emergència anul·la l'aplicació de la clàusula SLA-4.",
+                objectius: ["Identificar la clàusula d'excepció al contracte", "Obtenir el codi de validació CONFIANÇA"],
+                welcome_message: "Mòdul legal actiu. Indiqueu la documentació de referència per a la revisió.",
+            },
+            'MISION_4': {
+                titol: "Fase 4: Avaluació de Biaixos i Dictamen",
+                bot_name: "Supervisió d'Algorismes",
+                codi_correcte: "INTEGRITAT",
+                codi_desblocatge: "INTEGRITAT",
+                seguent_missio: "FINAL",
+                consell: "Analitzeu la ponderació de variables al codi font imprès.",
+                repte: "Localitzar la variable de priorització i redactar el dictamen final al dossier.",
+                objectius: ["Identificar la variable de ponderació no justificada", "Completar la secció final del dossier"],
+                welcome_message: "Mòdul de revisió algorítmica actiu. Calculeu els valors de ponderació del codi font.",
+            }
         }
     }
 };
@@ -410,7 +450,7 @@ function SimulacioContent() {
                                 type="text"
                                 required
                                 maxLength={10}
-                                placeholder="Ex: DEMO"
+                                placeholder="Ex: 1234"
                                 value={pin}
                                 onChange={(e) => setPin(e.target.value)}
                                 className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold text-stone-900 tracking-widest focus:outline-none focus:ring-2 focus:ring-stone-400 uppercase"

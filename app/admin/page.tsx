@@ -19,6 +19,7 @@ interface TeamData {
   informe_final: string | null
   hora_inici: string
   reflexio_individual?: string
+  total_prompts?: number // Comptador de consultes realitzades
 }
 
 interface TemplateOption {
@@ -30,24 +31,24 @@ interface TemplateOption {
 interface SessionData {
   id_sessio: string
   pin_acces: string
-  id_template: string
+  id_template?: string
   estat: 'EN_CURS' | 'ACTIVA' | 'FINALITZADA'
-  creat_el?: string
   created_at?: string
   nom_grup?: string
 }
 
-const mapMissions: Record<string, number> = {
-  'MISION_1': 25,
-  'MISION_2': 50,
-  'MISION_3': 75,
-  'MISION_4': 100,
-  'FINAL': 100
+// Utilitat per convertir l'ID de la missió a un número de fase (1 a 4)
+const getNumFase = (missioKey: string): number => {
+  if (!missioKey) return 1
+  if (missioKey === 'FINAL') return 4
+  const num = missioKey.replace('MISION_', '')
+  const parsed = parseInt(num, 10)
+  return isNaN(parsed) ? 1 : parsed
 }
 
 export default function AdminDashboard() {
   // ---------------------------------------------------------------------------
-  // ESTATS D'AUTENTICACIÓ (PROTECCIÓ FACILITADOR)
+  // ESTATS D'AUTENTICACIÓ
   // ---------------------------------------------------------------------------
   const [authChecking, setAuthChecking] = useState<boolean>(true)
   const [session, setSession] = useState<any>(null)
@@ -66,12 +67,14 @@ export default function AdminDashboard() {
   const [templateSessioActiva, setTemplateSessioActiva] = useState<string>('')
   const [equips, setEquips] = useState<TeamData[]>([])
   const [loading, setLoading] = useState<boolean>(false)
-  const [equipSeleccionat, setEquipSeleccionat] = useState<TeamData | null>(null)
+
+  // Guardem només l'ID seleccionat per evitar que l'objecte quedi congelat
+  const [idEquipSeleccionat, setIdEquipSeleccionat] = useState<string | null>(null)
+  const equipSeleccionat = equips.find(e => e.id_equip === idEquipSeleccionat) || null
 
   const [templates, setTemplates] = useState<TemplateOption[]>([])
   const [templateSeleccionada, setTemplateSeleccionada] = useState<string>('')
   const [mostrarModalLlançament, setMostrarModalLlançament] = useState<boolean>(false)
-  const [nomGrupInput, setNomGrupInput] = useState<string>('')
 
   const [idClientActual, setIdClientActual] = useState<string>('')
   const [projectingPin, setProjectingPin] = useState<string | null>(null)
@@ -163,7 +166,7 @@ export default function AdminDashboard() {
       })
 
       if (error) {
-        setLoginError('Accés denegat. Credencials de facilitador incorrectes.')
+        setLoginError('Accés denegat. Credencials incorrectes.')
       } else {
         posthog.capture('facilitator_logged_in')
         setSession(data.session)
@@ -223,15 +226,30 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('sessions')
-        .select('*')
+        .select(`
+          id_sessio,
+          pin_acces,
+          estat,
+          id_template,
+          pedagogical_templates (
+            id_template,
+            titol,
+            is_official
+          )
+        `)
         .eq('user_id', activeUserId)
         .order('id_sessio', { ascending: false })
 
-      if (!error && data) {
-        setTotesLesSessions(data)
+      if (error) {
+        console.error('Error Supabase carregant sessions:', error.message)
+        return
+      }
+
+      if (data) {
+        setTotesLesSessions(data as unknown as SessionData[])
       }
     } catch (err) {
-      console.error('Error carregant llista de sessions:', err)
+      console.error('Error inesperat carregant llista de sessions:', err)
     }
   }
 
@@ -242,12 +260,12 @@ export default function AdminDashboard() {
 
   const arrancarNouTallerMonetitzat = async () => {
     if (!templateSeleccionada) {
-      alert("⚠️ Seleccioneu una plantilla o cas abans de continuar!")
+      alert("Seleccioneu una plantilla abans de continuar.")
       return
     }
 
     if (!session?.user?.id) {
-      alert("🚨 Error d'autenticació. Inicieu sessió de nou.")
+      alert("Error d'autenticació. Inicieu sessió de nou.")
       return
     }
 
@@ -257,12 +275,12 @@ export default function AdminDashboard() {
       try {
         const { data: nouClient, error: errClient } = await supabase
           .from('clients')
-          .insert([{ nom: 'UNIVERSITAT DEMO', tipus_client: 'ACADEMIC', sector: 'EDUCACIO', credits_disponibles: 10 }])
+          .insert([{ nom: 'INSTITUCIÓ DEMO', tipus_client: 'ACADEMIC', sector: 'EDUCACIO', credits_disponibles: 10 }])
           .select('id_client')
           .single()
 
         if (errClient || !nouClient) {
-          alert("🚨 Error en inicialitzar el client per defecte.")
+          alert("Error en inicialitzar el compte per defecte.")
           return
         }
         clientId = nouClient.id_client
@@ -282,7 +300,7 @@ export default function AdminDashboard() {
         .eq('id_client', clientId)
 
       if (errorClient || !clients || clients.length === 0) {
-        alert(`🚨 CLIENT NO TROBAT: La ID de client [${clientId}] no existeix.`)
+        alert(`CLIENT NO TROBAT: La ID de client [${clientId}] no existeix.`)
         setLoading(false)
         return
       }
@@ -290,7 +308,7 @@ export default function AdminDashboard() {
       const saldoActual = clients[0].credits_disponibles ?? 0
 
       if (saldoActual <= 0) {
-        alert("🚨 SALDO INSUFICIENT: Teniu 0 crèdits disponibles.")
+        alert("SALDO INSUFICIENT: No teniu crèdits disponibles.")
         setLoading(false)
         return
       }
@@ -321,7 +339,7 @@ export default function AdminDashboard() {
         .single()
 
       if (errorSessio || !novaSessio) {
-        alert(`Error al registrar la sessió: ${errorSessio?.message}`)
+        alert(`Error en registrar la sessió: ${errorSessio?.message}`)
         setLoading(false)
         return
       }
@@ -333,11 +351,10 @@ export default function AdminDashboard() {
 
       setPinSessio(nouPin)
       setMostrarModalLlançament(false)
-      setNomGrupInput('')
       await carregarTotesLesSessions(session.user.id)
       await carregarDadesSessio(nouPin)
 
-      alert(`🎉 Taller llançat amb èxit!\n📂 Cas actiu: [${templateSeleccionada}]\n💸 Crèdit consumit (Saldo restant: ${saldoActual - 1}).\n🎯 PIN de sala per a l'aula: ${nouPin}`)
+      alert(`Sessió creada amb èxit.\n\nCas actiu: [${templateSeleccionada}]\nCrèdit consumit (Saldo restant: ${saldoActual - 1}).\nPIN d'accés: ${nouPin}`)
 
     } catch (err) {
       console.error(err)
@@ -346,29 +363,9 @@ export default function AdminDashboard() {
     }
   }
 
-  const carregarDadesSessio = async (pinTarget: string, isSilent = false) => {
-    if (!pinTarget.trim()) return
-    if (!isSilent) setLoading(true)
+  // NOVA FUNCIÓ AÏLLADA: Només descarrega els equips d'una sessió concreta
+  const actualitzarLlistaEquips = async (sessionId: string) => {
     try {
-      const { data: sessio, error: errorSessio } = await supabase
-        .from('sessions')
-        .select('id_sessio, id_client, id_template')
-        .eq('pin_acces', pinTarget.trim().toUpperCase())
-        .single()
-
-      if (errorSessio || !sessio) {
-        if (!isSilent) alert("⚠️ No s'ha trobat cap sessió amb aquest PIN.")
-        return
-      }
-
-      setIdSessio(sessio.id_sessio)
-      setTemplateSessioActiva(sessio.id_template || '')
-      setPinSessio(pinTarget.trim().toUpperCase())
-
-      if (!isSilent) {
-        posthog.capture('session_loaded', { team_count: 0 })
-      }
-
       const { data: equipsData, error: errorEquips } = await supabase
         .from('equips')
         .select(`
@@ -385,12 +382,25 @@ export default function AdminDashboard() {
             )
           )
         `)
-        .eq('id_sessio', sessio.id_sessio)
+        .eq('id_sessio', sessionId)
 
       if (!errorEquips && equipsData) {
         const formattedTeams: TeamData[] = equipsData.map((e: any) => {
           const sessionNode = Array.isArray(e.sessions) ? e.sessions[0] : e.sessions
           const clientNode = sessionNode?.clients ? (Array.isArray(sessionNode.clients) ? sessionNode.clients[0] : sessionNode.clients) : null
+
+          let numPrompts = 0
+          const historialRaw = e.dossier_actiu?.historial
+          if (Array.isArray(historialRaw)) {
+            numPrompts = historialRaw.filter((h: any) => h.role === 'user').length
+          } else if (typeof historialRaw === 'string') {
+            try {
+              const parsed = JSON.parse(historialRaw)
+              if (Array.isArray(parsed)) {
+                numPrompts = parsed.filter((h: any) => h.role === 'user').length
+              }
+            } catch (errorParse) { }
+          }
 
           return {
             id_equip: e.id_equip,
@@ -400,11 +410,44 @@ export default function AdminDashboard() {
             credits: clientNode?.credits_disponibles ?? 0,
             informe_final: e.dossier_actiu?.informe_final || null,
             reflexio_individual: e.dossier_actiu?.reflexio_individual || '',
-            hora_inici: e.creat_el || new Date().toISOString()
+            hora_inici: e.creat_el || new Date().toISOString(),
+            total_prompts: numPrompts
           }
         })
         setEquips(formattedTeams)
       }
+    } catch (err) {
+      console.error("Error sincronitzant equips:", err)
+    }
+  }
+
+  // La càrrega inicial crida la relació Sessió -> Equips
+  const carregarDadesSessio = async (pinTarget: string, isSilent = false) => {
+    if (!pinTarget.trim()) return
+    if (!isSilent) setLoading(true)
+    try {
+      const { data: sessio, error: errorSessio } = await supabase
+        .from('sessions')
+        .select('id_sessio, id_client, id_template')
+        .eq('pin_acces', pinTarget.trim().toUpperCase())
+        .single()
+
+      if (errorSessio || !sessio) {
+        if (!isSilent) alert("No s'ha trobat cap sessió amb aquest PIN.")
+        return
+      }
+
+      setIdSessio(sessio.id_sessio)
+      setTemplateSessioActiva(sessio.id_template || '')
+      setPinSessio(pinTarget.trim().toUpperCase())
+
+      if (!isSilent) {
+        posthog.capture('session_loaded', { team_count: 0 })
+      }
+
+      // Descarreguem els equips vinculats a l'ID
+      await actualitzarLlistaEquips(sessio.id_sessio)
+
     } catch (err) {
       console.error(err)
     } finally {
@@ -415,8 +458,6 @@ export default function AdminDashboard() {
   const arxivarSessióMestre = async (targetIdSessio?: string) => {
     const idAArxivar = targetIdSessio || idSessio
     if (!idAArxivar) return
-    const confirmar = confirm("🚨 Vols donar per acabat aquest taller i FINALITZAR la sessió? Els equips quedaran arxivats i la terminal de l'alumne es bloquejarà.")
-    if (!confirmar) return
 
     setLoading(true)
     try {
@@ -429,14 +470,14 @@ export default function AdminDashboard() {
         posthog.capture('session_archived', { team_count: equips.length })
         if (idSessio === idAArxivar) {
           setEquips([])
-          setEquipSeleccionat(null)
+          setIdEquipSeleccionat(null)
           setIdSessio(null)
           setPinSessio('')
         }
         await carregarTotesLesSessions(session?.user?.id)
-        alert("🔒 Partida finalitzada i arxivada correctament.")
+        alert("Sessió finalitzada i arxivada correctament.")
       } else {
-        alert(`Error al tancar la sessió: ${error.message}`)
+        alert(`Error en tancar la sessió: ${error.message}`)
       }
     } catch (err) {
       console.error(err)
@@ -445,35 +486,30 @@ export default function AdminDashboard() {
     }
   }
 
-  // Escolta Realtime quan hi ha una sessió oberta al monitor
+  // LOOP DE SINCRONITZACIÓ EN TEMPS REAL: independent i robust
   useEffect(() => {
-    if (!pinSessio || !idSessio) return
+    if (!idSessio) return
 
+    // 1. Escoltem via Websockets (Realtime) si està activat
     const canalEquips = supabase
       .channel(`equips-sessio-${idSessio}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'equips',
-          filter: `id_sessio=eq.${idSessio}`
-        },
-        () => {
-          carregarDadesSessio(pinSessio, true)
-        }
+        { event: '*', schema: 'public', table: 'equips', filter: `id_sessio=eq.${idSessio}` },
+        () => actualitzarLlistaEquips(idSessio)
       )
       .subscribe()
 
+    // 2. Polling assegurat cada 3 segons (per si falla Websocket o canvia saldo client)
     const interval = setInterval(() => {
-      carregarDadesSessio(pinSessio, true)
-    }, 5000)
+      actualitzarLlistaEquips(idSessio)
+    }, 3000)
 
     return () => {
       clearInterval(interval)
       supabase.removeChannel(canalEquips)
     }
-  }, [idSessio, pinSessio])
+  }, [idSessio])
 
   const modificarCreditsMestre = async (idEquip: string, idClient: string, canvi: number) => {
     const equip = equips.find(e => e.id_equip === idEquip)
@@ -482,14 +518,20 @@ export default function AdminDashboard() {
 
     const nouSaldo = Math.max(0, equip.credits + canvi)
 
+    // ACTUALITZACIÓ OPTIMISTA: canviem la UI ràpidament perquè l'usuari ho vegi al moment
+    setEquips(prev => prev.map(e => e.id_client === targetClientId ? { ...e, credits: nouSaldo } : e))
+
     try {
       const { error } = await supabase
         .from('clients')
         .update({ credits_disponibles: nouSaldo })
         .eq('id_client', targetClientId)
 
-      if (!error) {
-        setEquips(prev => prev.map(e => e.id_equip === idEquip ? { ...e, credits: nouSaldo } : e))
+      if (error) {
+        console.error("Error BD modificar crèdits:", error.message)
+        alert(`No s'han pogut actualitzar els crèdits: ${error.message}`)
+        // Si falla fem un rollback al valor original
+        setEquips(prev => prev.map(e => e.id_client === targetClientId ? { ...e, credits: equip.credits } : e))
       }
     } catch (err) {
       console.error("Error modificarCreditsMestre:", err)
@@ -497,16 +539,25 @@ export default function AdminDashboard() {
   }
 
   const forcarSaltMissio = async (idEquip: string, seguentMissio: string) => {
+    const equipPrevi = equips.find(e => e.id_equip === idEquip)
+    if (!equipPrevi) return
+
+    // Actualització optimista per moure la progress bar a temps real
+    setEquips(prev => prev.map(e => e.id_equip === idEquip ? { ...e, missio_actual: seguentMissio } : e))
+
     try {
       const { error } = await supabase
         .from('equips')
         .update({ missio_actual: seguentMissio })
         .eq('id_equip', idEquip)
 
-      if (!error) {
+      if (error) {
+        console.error("Error BD forçar salt:", error.message)
+        alert(`No s'ha pogut canviar la fase: ${error.message}`)
+        // Rollback visual si falla la crida a BD
+        setEquips(prev => prev.map(e => e.id_equip === idEquip ? { ...e, missio_actual: equipPrevi.missio_actual } : e))
+      } else {
         posthog.capture('team_mission_forced', { target_mission: seguentMissio })
-        setEquips(prev => prev.map(e => e.id_equip === idEquip ? { ...e, missio_actual: seguentMissio } : e))
-        alert(`🚀 S'ha forçat el salt a ${seguentMissio}`)
       }
     } catch (err) {
       console.error("Error forcarSaltMissio:", err)
@@ -534,7 +585,7 @@ export default function AdminDashboard() {
   if (authChecking) {
     return (
       <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center text-stone-400 font-mono text-xs">
-        Verificant permisos de facilitador...
+        Verificant permissos d'accés...
       </div>
     )
   }
@@ -544,23 +595,23 @@ export default function AdminDashboard() {
   // ---------------------------------------------------------------------------
   if (!session) {
     return (
-      <div className="min-h-screen flex flex-col justify-between bg-[#FAF8F5] text-stone-800 font-sans p-6 selection:bg-amber-100">
+      <div className="min-h-screen flex flex-col justify-between bg-[#FAF8F5] text-stone-800 font-sans p-6 selection:bg-stone-200">
         <header className="max-w-5xl w-full mx-auto flex justify-between items-center py-4">
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
           </div>
-          <span className="text-[10px] font-mono px-3 py-1.5 bg-white border border-stone-200 text-stone-500 rounded-md shadow-xs">
-            CENTRE D'OPERACIONS
+          <span className="text-[10px] font-mono px-3 py-1.5 bg-white border border-stone-200 text-stone-500 rounded-md shadow-xs uppercase tracking-wider">
+            Plataforma d'Avaluació
           </span>
         </header>
 
         <main className="max-w-md w-full mx-auto my-auto bg-white border border-stone-200/80 rounded-2xl p-8 shadow-sm">
           <div className="mb-8 text-center space-y-2">
             <h1 className="text-2xl font-serif font-medium text-stone-900 tracking-tight">
-              Accés per a Facilitadors
+              Accés de Facilitadors
             </h1>
             <p className="text-xs text-stone-500 leading-relaxed">
-              Inicieu sessió per crear sales, gestionar els equips i fer el seguiment de les simulacions.
+              Inicieu sessió per gestionar les simulacions, crear sessions i supervisar l'activitat dels equips.
             </p>
           </div>
 
@@ -580,7 +631,7 @@ export default function AdminDashboard() {
                 required
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
-                placeholder="pedrojuanes@synusia.io"
+                placeholder="nom@organitzacio.com"
                 className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white transition-all"
               />
             </div>
@@ -604,13 +655,13 @@ export default function AdminDashboard() {
               disabled={loginLoading}
               className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium py-3 rounded-xl text-sm transition duration-200 disabled:opacity-50 mt-4 shadow-sm cursor-pointer"
             >
-              {loginLoading ? 'Autenticant...' : 'Accedir al Tauler →'}
+              {loginLoading ? 'Iniciant sessió...' : 'Accedir al Taulell →'}
             </button>
           </form>
         </main>
 
         <footer className="max-w-5xl w-full mx-auto text-center py-4 text-[11px] text-stone-400 font-mono">
-          Nucli Innovation SL &copy; {new Date().getFullYear()} &mdash; Synusia Platform
+          Synusia Platform &copy; {new Date().getFullYear()}
         </footer>
       </div>
     )
@@ -631,7 +682,7 @@ export default function AdminDashboard() {
 
         <div className="text-center space-y-8">
           <Image src="/logo.png" alt="Synusia Logo" width={180} height={50} className="mx-auto mb-6 opacity-90 object-contain" priority />
-          <h1 className="text-3xl sm:text-4xl font-serif text-stone-900">Entreu a la Simulació</h1>
+          <h1 className="text-3xl sm:text-4xl font-serif text-stone-900">Accés a la Simulació</h1>
           <p className="text-lg text-stone-500 font-mono bg-stone-100/80 px-4 py-1.5 rounded-full inline-block border border-stone-200/60">
             app.synusia.io
           </p>
@@ -653,7 +704,7 @@ export default function AdminDashboard() {
   // VISTA 4: TAULELL DE CONTROL (FACILITADOR AUTENTICAT)
   // ---------------------------------------------------------------------------
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-800 p-6 font-sans selection:bg-amber-100">
+    <div className="min-h-screen bg-[#FAF8F5] text-stone-800 p-6 font-sans selection:bg-stone-200">
 
       {/* CAPÇALERA DE LA PLATAFORMA */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-stone-200/80 pb-6 mb-6 gap-4 no-print">
@@ -662,10 +713,10 @@ export default function AdminDashboard() {
             <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
             <span className="text-stone-300">|</span>
             <h1 className="text-xl font-serif font-medium tracking-tight text-stone-900">
-              Centre d'Operacions
+              Taulell de Control
             </h1>
           </div>
-          <p className="text-xs text-stone-500 mt-1">Gestió d'aules, creació de sales i seguiment de simulacions en temps real</p>
+          <p className="text-xs text-stone-500 mt-1">Supervisió de sessions i gestió d'avaluacions en temps real</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -673,7 +724,7 @@ export default function AdminDashboard() {
             href="/admin/templates"
             className="inline-flex items-center gap-1.5 bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 font-medium text-xs py-2.5 px-4 rounded-xl transition-all shadow-xs"
           >
-            📚 Gestor de Casos
+            Gestor de Casos
           </Link>
 
           <button
@@ -681,16 +732,16 @@ export default function AdminDashboard() {
             disabled={loading}
             className="bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-2.5 px-4 rounded-xl transition-all shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
           >
-            ＋ Obrir Nova Sala (-1 CR)
+            ＋ Nova Sessió
           </button>
 
           <div className="flex items-center gap-1 bg-white p-1 rounded-xl border border-stone-200 shadow-xs ml-1">
             <input
               type="text"
-              placeholder="PIN sala"
+              placeholder="PIN"
               value={pinSessio}
               onChange={(e) => setPinSessio(e.target.value)}
-              className="bg-[#FAF8F5] border border-stone-300 rounded-lg px-2.5 py-1 text-center text-xs font-mono font-bold tracking-widest text-stone-900 focus:outline-none uppercase w-24"
+              className="bg-[#FAF8F5] border border-stone-300 rounded-lg px-2.5 py-1 text-center text-xs font-mono font-bold tracking-widest text-stone-900 focus:outline-none uppercase w-20"
             />
             <button
               onClick={() => carregarDadesSessio(pinSessio)}
@@ -705,35 +756,35 @@ export default function AdminDashboard() {
             className="text-stone-400 hover:text-red-600 text-xs px-2 py-1 transition-colors cursor-pointer ml-1"
             title="Tancar sessió"
           >
-            🚪
+            Sortir
           </button>
         </div>
       </header>
 
-      {/* MODAL PER LLANÇAR NOVA SALA */}
+      {/* MODAL PER CREAR NOVA SESSIÓ */}
       {mostrarModalLlançament && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
           <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-5">
             <div>
-              <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">CONFIGURACIÓ DE SALA</span>
-              <h2 className="text-lg font-serif font-medium text-stone-900 mt-0.5">Llançar Nova Simulació</h2>
-              <p className="text-xs text-stone-500 mt-1">Es generarà un PIN únic de 4 lletres perquè els alumnes accedeixin.</p>
+              <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">CONFIGURACIÓ DE LA SESSIÓ</span>
+              <h2 className="text-lg font-serif font-medium text-stone-900 mt-0.5">Crear Nova Sessió</h2>
+              <p className="text-xs text-stone-500 mt-1">Es generarà un PIN d'accés perquè els participants s'hi puguin incorporar.</p>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-stone-700 mb-1">Selecciona el Cas*</label>
+                <label className="block text-xs font-medium text-stone-700 mb-1">Seleccioneu la plantilla del cas *</label>
                 <select
                   value={templateSeleccionada}
                   onChange={(e) => setTemplateSeleccionada(e.target.value)}
                   className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl p-3 text-xs font-mono font-bold text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400 cursor-pointer"
                 >
                   {templates.length === 0 ? (
-                    <option value="CAS_OMNIA_2026">CAS_OMNIA_2026 (Per defecte)</option>
+                    <option value="CAS_OMNIA_2026">CAS_OMNIA_2026 (Plantilla per defecte)</option>
                   ) : (
                     templates.map((t) => (
                       <option key={t.id_template} value={t.id_template}>
-                        {t.is_official ? '🏛️ ' : ''}{t.titol ? `${t.titol} [${t.id_template}]` : t.id_template}
+                        {t.is_official ? '[Oficial] ' : ''}{t.titol ? `${t.titol} [${t.id_template}]` : t.id_template}
                       </option>
                     ))
                   )}
@@ -741,8 +792,8 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div className="bg-amber-50/80 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-900 leading-relaxed">
-              ⚡ En confirmar, es descomptarà 1 crèdit del teu compte i la sala quedarà en estat <strong>ACTIVA</strong> per als alumnes.
+            <div className="bg-stone-50 border border-stone-200 p-3 rounded-xl text-[11px] text-stone-700 leading-relaxed">
+              En confirmar, es descomptarà 1 crèdit del vostre compte i la sessió quedarà immediatament activa per als participants.
             </div>
 
             <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
@@ -757,25 +808,25 @@ export default function AdminDashboard() {
                 disabled={loading}
                 className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-4 py-2.5 rounded-xl cursor-pointer shadow-xs disabled:opacity-50 transition-colors"
               >
-                {loading ? 'Llançant...' : '🚀 Confirmar i Llançar (-1 CR)'}
+                {loading ? 'Creant...' : 'Confirmar i crear sessió'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* SI TENIM UNA SESSIÓ SELECCIONADA/CARREGADA AL MONITOR */}
+      {/* MONITOR DE SESSIÓ SELECCIONADA */}
       {idSessio ? (
         <div className="space-y-4 animate-fade-in">
 
-          {/* BARRA DE MONITORITZACIÓ DE SALA */}
+          {/* BARRA DE MONITORITZACIÓ DE SESSIÓ */}
           <div className="flex flex-wrap justify-between items-center bg-white p-3.5 rounded-2xl border border-stone-200/90 shadow-xs gap-3">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { setIdSessio(null); setPinSessio(''); setEquips([]); setEquipSeleccionat(null); }}
-                className="text-xs text-stone-500 hover:text-stone-900 font-mono flex items-center gap-1 underline transition-colors cursor-pointer"
+                onClick={() => { setIdSessio(null); setPinSessio(''); setEquips([]); setIdEquipSeleccionat(null); }}
+                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-3 py-1.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                ← Tornar a la Llista de Sales
+                ← Tornar a la llista <span className="text-[10px] text-stone-400 font-normal hidden sm:inline">(la sessió continua activa)</span>
               </button>
               <span className="text-stone-300">|</span>
               <span className="text-xs font-mono text-stone-600 bg-stone-100 px-2.5 py-1 rounded-lg border border-stone-200/80">
@@ -790,30 +841,34 @@ export default function AdminDashboard() {
               <button
                 onClick={() => setProjectingPin(pinSessio)}
                 className="bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 text-xs font-medium px-3 py-1.5 rounded-xl transition-all cursor-pointer flex items-center gap-1"
-                title="Projectar a la pissarra"
+                title="Projectar el PIN a la pantalla principal"
               >
-                📺 Projectar PIN
+                Projectar PIN
               </button>
 
               <button
                 onClick={() => descarregarTelemetria(idSessio, 'csv')}
                 className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-mono font-medium px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-xs cursor-pointer"
               >
-                📥 CSV
+                Exportar CSV
               </button>
 
               <button
                 onClick={() => descarregarTelemetria(idSessio, 'json')}
                 className="bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200/80 text-xs font-mono font-medium px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 shadow-xs cursor-pointer"
               >
-                📄 JSON
+                Exportar JSON
               </button>
 
               <button
-                onClick={() => arxivarSessióMestre(idSessio)}
+                onClick={() => {
+                  if (confirm("Esteu segur que voleu finalitzar aquesta sessió? Els equips no podran continuar interactuant.")) {
+                    arxivarSessióMestre(idSessio);
+                  }
+                }}
                 className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-xs font-medium px-3 py-1.5 rounded-xl transition-all no-print cursor-pointer"
               >
-                🔒 Arxivar Sala
+                Finalitzar sessió
               </button>
             </div>
           </div>
@@ -824,60 +879,102 @@ export default function AdminDashboard() {
             {/* GRUP DE TARGETES D'EQUIPS */}
             <div className="xl:col-span-2 space-y-4">
               <h2 className="text-[10px] font-mono font-medium tracking-widest uppercase text-stone-400">
-                EQUIPS EN SALA ({equips.length})
+                EQUIPS REGISTRATS ({equips.length})
               </h2>
 
               {equips.length === 0 && (
                 <div className="text-xs text-stone-400 italic p-8 bg-white border border-dashed border-stone-200 rounded-2xl text-center space-y-2">
-                  <p>Sessió activa correctament. Esperant que els equips s'inscriguin des de la terminal de l'alumne...</p>
-                  <p className="font-mono text-[11px] text-stone-500">Projecteu el PIN [{pinSessio}] a la pantalla de la classe.</p>
+                  <p>Sessió activa. Esperant que els equips s'inscriguin des del seu entorn de treball...</p>
+                  <p className="font-mono text-[11px] text-stone-500">Projecteu el PIN [{pinSessio}] a la pantalla general.</p>
                 </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {equips.map((team) => {
-                  const progres = mapMissions[team.missio_actual] || 25
+                  const numFase = getNumFase(team.missio_actual)
+                  const percentatge = numFase * 25
                   const esLimit = team.credits <= 0
                   const isSelected = equipSeleccionat?.id_equip === team.id_equip
 
                   return (
                     <div
                       key={team.id_equip}
-                      onClick={() => setEquipSeleccionat(team)}
+                      onClick={() => setIdEquipSeleccionat(team.id_equip)}
                       className={`p-4 rounded-xl border transition-all cursor-pointer bg-white shadow-xs ${isSelected
                         ? 'border-stone-800 ring-2 ring-stone-900/10 bg-stone-50/60'
                         : 'border-stone-200/90 hover:border-stone-300'
                         }`}
                     >
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start mb-2">
                         <div>
                           <h3 className="font-semibold text-stone-900 text-sm tracking-wide">{team.noms_equip}</h3>
-                          <span className="text-[10px] font-mono text-stone-600 uppercase bg-stone-100 px-2 py-0.5 rounded border border-stone-200 mt-1.5 inline-block">
-                            🎯 {(team.missio_actual || 'MISION_1').replace('_', ' ')}
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] font-mono font-semibold text-stone-700 bg-stone-100 px-2 py-0.5 rounded border border-stone-200">
+                              Fase {numFase} de 4
+                            </span>
+                            {team.total_prompts !== undefined && (
+                              <span className="text-[10px] font-mono text-stone-500">
+                                💬 {team.total_prompts} consultes
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-right">
+                          <span className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded block ${esLimit
+                            ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse'
+                            : 'bg-stone-100 text-stone-700 border border-stone-200'
+                            }`}>
+                            {team.credits} consultes restants
                           </span>
                         </div>
-                        <span className={`text-xs font-mono font-semibold px-2 py-0.5 rounded ${esLimit
-                          ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse'
-                          : 'bg-stone-100 text-stone-800 border border-stone-200'
-                          }`}>
-                          ⚡ {team.credits} CR
-                        </span>
                       </div>
 
-                      <div className="space-y-1 mb-4">
+                      {/* BARRA DE PROGRÉS REAL */}
+                      <div className="space-y-1 my-3">
+                        <div className="flex justify-between text-[9px] font-mono text-stone-400 mb-1">
+                          <span>Progrés de l'auditoria</span>
+                          <span>{percentatge}%</span>
+                        </div>
                         <div className="w-full bg-stone-100 h-2 rounded-full overflow-hidden border border-stone-200/80">
-                          <div className="bg-stone-800 h-full transition-all duration-1000" style={{ width: `${progres}%` }} />
+                          <div
+                            className="bg-stone-800 h-full transition-all duration-500 ease-out"
+                            style={{ width: `${percentatge}%` }}
+                          />
                         </div>
                       </div>
 
+                      {/* CONTROLS DE FACILITACIÓ EN TEMPS REAL */}
                       <div className="flex justify-between items-center pt-3 border-t border-stone-100 gap-2 no-print" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex gap-1">
-                          <button onClick={() => modificarCreditsMestre(team.id_equip, team.id_client, -1)} className="bg-stone-100 hover:bg-stone-200 text-stone-700 w-6 h-6 border border-stone-200 rounded text-xs cursor-pointer">-1</button>
-                          <button onClick={() => modificarCreditsMestre(team.id_equip, team.id_client, 2)} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 px-2 h-6 border border-emerald-200 rounded text-[10px] font-medium cursor-pointer">+2 CR</button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              if (confirm(`Vols concedir 5 consultes d'IA extra a l'equip ${team.noms_equip}?`)) {
+                                modificarCreditsMestre(team.id_equip, team.id_client, 5);
+                              }
+                            }}
+                            className="bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-200 text-[10px] font-medium px-2 py-1.5 rounded cursor-pointer transition-colors"
+                            title="Concedir 5 consultes d'IA addicionals a aquest equip"
+                          >
+                            ＋5 consultes
+                          </button>
                         </div>
+
                         <div className="flex gap-1 text-[10px] font-mono">
                           {['MISION_1', 'MISION_2', 'MISION_3', 'MISION_4'].map((m, idx) => (
-                            <button key={m} onClick={() => forcarSaltMissio(team.id_equip, m)} disabled={team.missio_actual === m} className="bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-600 px-1.5 rounded disabled:opacity-30 cursor-pointer">M{idx + 1}</button>
+                            <button
+                              key={m}
+                              onClick={() => {
+                                if (confirm(`Voleu forçar el pas de l'equip a la Fase ${idx + 1}?`)) {
+                                  forcarSaltMissio(team.id_equip, m);
+                                }
+                              }}
+                              disabled={team.missio_actual === m}
+                              className="bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-600 px-1.5 py-0.5 rounded disabled:opacity-30 cursor-pointer font-mono"
+                              title={`Forçar pas a la Fase ${idx + 1}`}
+                            >
+                              F{idx + 1}
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -887,19 +984,21 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* AUDITORIA EN CRU / DETAIL PANEL */}
-            <div className="bg-white border border-stone-200/90 rounded-2xl p-5 h-[76vh] flex flex-col justify-between overflow-y-auto shadow-xs">
+            {/* AUDITORIA I DETALL DE L'EQUIP */}
+            <div className="bg-white border border-stone-200/90 rounded-2xl p-5 min-h-[480px] flex flex-col justify-between overflow-y-auto shadow-xs">
               {equipSeleccionat ? (
                 <div className="space-y-6 h-full flex flex-col justify-between">
                   <div className="space-y-6">
                     <div className="border-b border-stone-100 pb-3">
-                      <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">// COGNITIVE AUDIT LOGS</span>
+                      <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest">
+                        REGISTRE D'ACTIVITAT
+                      </span>
                       <h2 className="text-lg font-serif font-medium text-stone-900 mt-0.5">{equipSeleccionat.noms_equip}</h2>
                     </div>
 
                     <div className="space-y-1.5">
                       <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block">
-                        🧠 Reflexió de Calibratge (Misió 0):
+                        Reflexió inicial:
                       </span>
                       <div className="bg-[#FAF8F5] p-3 rounded-xl border border-stone-200/80 text-xs text-stone-700 italic leading-relaxed">
                         "{equipSeleccionat.reflexio_individual || 'Cap reflexió inicial registrada.'}"
@@ -908,7 +1007,7 @@ export default function AdminDashboard() {
 
                     <div className="space-y-1.5">
                       <span className="text-[10px] font-mono font-medium text-stone-500 uppercase tracking-wider block">
-                        ⚖️ Dictamen / Resolució Final:
+                        Dictamen / Resolució Final:
                       </span>
                       {equipSeleccionat.informe_final ? (
                         <div className="bg-[#FAF8F5] p-3 rounded-xl border-l-3 border-l-stone-900 border-stone-200 text-xs text-stone-800 leading-relaxed">
@@ -923,18 +1022,22 @@ export default function AdminDashboard() {
 
                     <div className="p-3 bg-stone-50 border border-stone-200/80 rounded-xl space-y-1 font-mono text-[11px] text-stone-600">
                       <div className="flex justify-between">
-                        <span>Hora Inici:</span>
+                        <span>Hora d'inici:</span>
                         <span className="font-semibold text-stone-800">
                           {new Date(equipSeleccionat.hora_inici).toLocaleTimeString('ca-ES')}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Missió Activa:</span>
-                        <span className="font-semibold text-stone-800">{equipSeleccionat.missio_actual}</span>
+                        <span>Fase activa:</span>
+                        <span className="font-semibold text-stone-800">Fase {getNumFase(equipSeleccionat.missio_actual)} de 4</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Crèdits Disponibles:</span>
-                        <span className="font-semibold text-stone-800">{equipSeleccionat.credits} CR</span>
+                        <span>Consultes realitzades:</span>
+                        <span className="font-semibold text-stone-800">{equipSeleccionat.total_prompts || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Consultes restants:</span>
+                        <span className="font-semibold text-stone-800">{equipSeleccionat.credits}</span>
                       </div>
                     </div>
                   </div>
@@ -944,14 +1047,13 @@ export default function AdminDashboard() {
                       onClick={() => descarregarTelemetria(idSessio!, 'csv')}
                       className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2.5 rounded-xl transition-colors cursor-pointer shadow-xs flex items-center justify-center gap-2"
                     >
-                      <span>📥</span> Descarregar Telemetria en CSV
+                      Exportar activitat de la sessió (CSV)
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-stone-400 space-y-2">
-                  <span className="text-2xl">📊</span>
-                  <p className="text-xs font-sans">Seleccioneu un equip de la llista per veure la seva auditoria en temps real.</p>
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-stone-400 space-y-2 my-auto">
+                  <p className="text-xs font-sans">Seleccioneu un equip de la llista per veure el seu registre d'activitat en temps real.</p>
                 </div>
               )}
             </div>
@@ -959,15 +1061,15 @@ export default function AdminDashboard() {
           </div>
         </div>
       ) : (
-        /* VISTA PRINCIPAL DE SALES (QUAN NO N'HI HA CAP CARREGADA AL MONITOR) */
+        /* VISTA PRINCIPAL DE SESSIONS (QUAN NO N'HI HA CAP CARREGADA AL MONITOR) */
         <div className="space-y-10 animate-fade-in">
 
-          {/* SECCIÓ 1: SALES ACTIVES (EN CURS) */}
+          {/* SECCIÓ 1: SESSIONS ACTIVES */}
           <section>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
               <h2 className="text-xs font-mono font-semibold text-stone-900 uppercase tracking-widest">
-                Aules en Curs ({sessionsActives.length})
+                Sessions en Curs ({sessionsActives.length})
               </h2>
             </div>
 
@@ -978,7 +1080,7 @@ export default function AdminDashboard() {
                   onClick={obrirModalLlançament}
                   className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-4 py-2 rounded-xl transition-colors cursor-pointer"
                 >
-                  ＋ Obrir la primera sala
+                  ＋ Crear la primera sessió
                 </button>
               </div>
             ) : (
@@ -986,12 +1088,12 @@ export default function AdminDashboard() {
                 {sessionsActives.map((s) => (
                   <div
                     key={s.id_sessio}
-                    className="bg-white border border-stone-200/90 rounded-2xl p-5 shadow-2xs hover:border-stone-300 transition-all flex flex-col justify-between"
+                    className="bg-white border border-stone-200/90 rounded-2xl p-5 shadow-2xs hover:border-stone-300 transition-all flex flex-col justify-between gap-4"
                   >
-                    <div className="flex justify-between items-start mb-3">
+                    <div className="flex justify-between items-start">
                       <div>
                         <span className="text-[10px] font-mono text-stone-400 uppercase tracking-wider block">
-                          CAS
+                          PLANTILLA
                         </span>
                         <h3 className="text-sm font-semibold text-stone-900 mt-0.5">
                           {s.id_template}
@@ -1004,26 +1106,30 @@ export default function AdminDashboard() {
                       </div>
                     </div>
 
-                    <div className="flex gap-2 pt-4 border-t border-stone-100">
+                    <div className="flex gap-2 pt-3 border-t border-stone-100">
                       <button
                         onClick={() => carregarDadesSessio(s.pin_acces)}
                         className="flex-1 bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2 rounded-xl transition-colors cursor-pointer text-center"
                       >
-                        📊 Monitoritzar
+                        Monitoritzar
                       </button>
                       <button
                         onClick={() => setProjectingPin(s.pin_acces)}
                         className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-3 py-2 rounded-xl transition-colors cursor-pointer"
-                        title="Projectar a la pissarra"
+                        title="Projectar el PIN"
                       >
-                        📺
+                        Projectar PIN
                       </button>
                       <button
-                        onClick={() => arxivarSessióMestre(s.id_sessio)}
-                        className="bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium px-3 py-2 rounded-xl transition-colors cursor-pointer"
-                        title="Finalitzar Sessió"
+                        onClick={() => {
+                          if (confirm("Esteu segur que voleu finalitzar aquesta sessió?")) {
+                            arxivarSessióMestre(s.id_sessio);
+                          }
+                        }}
+                        className="bg-red-50 hover:bg-red-100 text-red-700 text-xs font-medium px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                        title="Finalitzar sessió"
                       >
-                        Arxivar
+                        Finalitzar
                       </button>
                     </div>
                   </div>
@@ -1042,7 +1148,7 @@ export default function AdminDashboard() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-[#FAF8F5] border-b border-stone-200 text-[10px] uppercase font-mono tracking-wider text-stone-500">
-                    <th className="p-4 font-medium">Cas</th>
+                    <th className="p-4 font-medium">Plantilla</th>
                     <th className="p-4 font-medium">PIN</th>
                     <th className="p-4 font-medium">Estat</th>
                     <th className="p-4 font-medium text-right">Accions</th>
