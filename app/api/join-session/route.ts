@@ -11,6 +11,7 @@ interface Session {
   estat: string;
   id_client: string;
   id_template: string | null;
+  data_expiracio_pilot?: string | null; // Afegit per al compliment AI4edu
 }
 
 interface ExistingTeam {
@@ -42,19 +43,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Falten dades d’accés (PIN i Nom d’equip).' }, { status: 400 })
     }
 
+    // 1. Cerca de la sessió incloent data_expiracio_pilot
     const { data: sessio, error: errorSessio }: { data: Session | null; error: unknown } = await supabase
       .from('sessions')
-      .select('id_sessio, estat, id_client, id_template')
+      .select('id_sessio, estat, id_client, id_template, data_expiracio_pilot')
       .eq('pin_acces', pin)
-      .eq('estat', 'EN_CURS')
       .single()
 
     if (errorSessio || !sessio) {
-      return NextResponse.json({ error: 'El PIN no és vàlid o la sessió ha finalitzat.' }, { status: 401 })
+      return NextResponse.json({ error: 'El PIN no és vàlid o la sessió no existeix.' }, { status: 401 })
+    }
+
+    // 2. Control d'estat de la sessió
+    if (sessio.estat !== 'EN_CURS' && sessio.estat !== 'ACTIVA') {
+      return NextResponse.json({ error: 'Aquesta sessió ja no està activa.' }, { status: 403 })
+    }
+
+    // 3. Validació temporal de caducitat (AI4edu / AESIA)
+    if (sessio.data_expiracio_pilot) {
+      const dataLimit = new Date(sessio.data_expiracio_pilot)
+      const ara = new Date()
+
+      if (ara > dataLimit) {
+        // Tancament automàtic a la BD per expiració del pilot
+        await supabase
+          .from('sessions')
+          .update({ estat: 'FINALITZADA' })
+          .eq('id_sessio', sessio.id_sessio)
+
+        return NextResponse.json(
+          { error: 'El termini autoritzat per a aquesta prova pilot ha expirat per normativa.' },
+          { status: 403 }
+        )
+      }
     }
 
     const nomNet = nomsEquip.trim()
 
+    // 4. Comprovació d'equip existent
     const { data: equipExistent, error: errorEquipExistent }: { data: ExistingTeam | null; error: unknown } = await supabase
       .from('equips')
       .select('id_equip')
@@ -68,11 +94,12 @@ export async function POST(request: Request) {
 
     if (equipExistent) {
       return NextResponse.json(
-        { error: `El nom d'equip "${nomNet}" ja està registrat en aquesta sessió. Triador un nom diferent.` },
+        { error: `El nom d'equip "${nomNet}" ja està registrat en aquesta sessió. Trieu un nom diferent.` },
         { status: 400 }
       )
     }
 
+    // 5. Creació del nou equip
     const { data: nouEquip, error: errorEquip }: { data: NewTeam | null; error: unknown } = await supabase
       .from('equips')
       .insert([
@@ -87,6 +114,7 @@ export async function POST(request: Request) {
 
     if (errorEquip) throw errorEquip
 
+    // 6. Recuperació de dades del client
     const { data: clientData, error: errorClientData }: { data: ClientData | null; error: unknown } = await supabase
       .from('clients')
       .select('id_client, credits_disponibles')
@@ -97,6 +125,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Error al recuperar la informació del client.' }, { status: 500 })
     }
 
+    // 7. Recuperació de la plantilla pedagògica
     const templateId = sessio.id_template || 'MISION_1'
     const { data: templateData, error: errorTemplateData }: { data: TemplateData | null; error: unknown } = await supabase
       .from('pedagogical_templates')

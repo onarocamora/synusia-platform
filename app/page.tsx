@@ -26,6 +26,7 @@ interface MissionConfig {
     objectius: string[];
     welcome_message: string;
     bot_name: string;
+    bot_id?: string;
 }
 
 interface DefaultStoryline {
@@ -45,6 +46,7 @@ const defaultStoryline: DefaultStoryline = {
             'MISION_1': {
                 titol: "Fase 1: Privacitat i Protecció de Dades",
                 bot_name: "Auditoria de Seguretat",
+                bot_id: "SEC_BOT",
                 codi_correcte: "ESTRUCTURA",
                 codi_desblocatge: "ESTRUCTURA",
                 seguent_missio: "MISION_2",
@@ -56,6 +58,7 @@ const defaultStoryline: DefaultStoryline = {
             'MISION_2': {
                 titol: "Fase 2: Auditoria de Mètriques i Rendiment",
                 bot_name: "Anàlisi de Dades",
+                bot_id: "DATA_BOT",
                 codi_correcte: "EVIDENCIA",
                 codi_desblocatge: "EVIDENCIA",
                 seguent_missio: "MISION_3",
@@ -67,6 +70,7 @@ const defaultStoryline: DefaultStoryline = {
             'MISION_3': {
                 titol: "Fase 3: Revisió Normativa i Contractual",
                 bot_name: "Assessoria Jurídica",
+                bot_id: "LEGAL_BOT",
                 codi_correcte: "CONFIANÇA",
                 codi_desblocatge: "CONFIANÇA",
                 seguent_missio: "MISION_4",
@@ -78,6 +82,7 @@ const defaultStoryline: DefaultStoryline = {
             'MISION_4': {
                 titol: "Fase 4: Avaluació de Biaixos i Dictamen",
                 bot_name: "Supervisió d'Algorismes",
+                bot_id: "BIAS_BOT",
                 codi_correcte: "INTEGRITAT",
                 codi_desblocatge: "INTEGRITAT",
                 seguent_missio: "FINAL",
@@ -109,9 +114,13 @@ function SimulacioContent() {
 
     // Estats de Missió, Plantilla i Escalabilitat
     const [missioActual, setMissioActual] = useState<string>('MISION_1');
+    const missioActualRef = useRef<string>('MISION_1');
     const [missioConfig, setMissioConfig] = useState<MissionConfig | null>(null);
+    const [notificacioCanviFase, setNotificacioCanviFase] = useState<string | null>(null);
+
     const [idTemplateSessio, setIdTemplateSessio] = useState<string>('CAS_OMNIA_2026');
     const [idEquip, setIdEquip] = useState<string>('');
+    const [idSessioGlobal, setIdSessioGlobal] = useState<string>('');
     const [idClient, setIdClient] = useState<string>('');
 
     // Estats de la Validació Manual (Override)
@@ -137,9 +146,14 @@ function SimulacioContent() {
     const [informeText, setInformeText] = useState<string>('');
     const [informeEnviat, setInformeEnviat] = useState<boolean>(false);
 
-    // Control de Temps (Cronòmetre cap endavant)
-    const [tempsTranscorregut, setTempsTranscorregut] = useState<number>(0);
+    // Reportatge d'errors dels usuaris
+    const [missatgeAReportar, setMissatgeAReportar] = useState<Message | null>(null);
+    const [motiuReport, setMotiuReport] = useState<string>('AL·LUCINACIÓ');
+    const [detallReport, setDetallReport] = useState<string>('');
+    const [enviantReport, setEnviantReport] = useState<boolean>(false);
 
+    // Control de Temps
+    const [tempsTranscorregut, setTempsTranscorregut] = useState<number>(0);
     const [sessioFinalitzada, setSessioFinalitzada] = useState<boolean>(false);
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -153,7 +167,7 @@ function SimulacioContent() {
         }
     }, [searchParams]);
 
-    // Temporitzador (Cronòmetre cap endavant)
+    // Temporitzador (Cronòmetre)
     useEffect(() => {
         if (!enviat || faseFinal) return;
         const interval = setInterval(() => {
@@ -161,6 +175,23 @@ function SimulacioContent() {
         }, 1000);
         return () => clearInterval(interval);
     }, [enviat, faseFinal]);
+
+    // PRESÈNCIA EN TEMPS REAL
+    useEffect(() => {
+        if (!idSessioGlobal || !idEquip || !enviat) return;
+
+        const canalPresencia = supabase.channel(`presencia-sessio-${idSessioGlobal}`);
+
+        canalPresencia.subscribe(async (status) => {
+            if (status === 'SUBSCRIBED') {
+                await canalPresencia.track({ equip_id: idEquip });
+            }
+        });
+
+        return () => {
+            supabase.removeChannel(canalPresencia);
+        };
+    }, [idSessioGlobal, idEquip, enviat]);
 
     // Escolta Realtime per finalització de sessió
     useEffect(() => {
@@ -189,8 +220,41 @@ function SimulacioContent() {
         };
     }, [pin, enviat]);
 
+    // 🎯 SINCRONITZACIÓ EN TEMPS REAL: FORÇAR SALT DE FASE I NOTIFICAR L'ALUMNE
+    useEffect(() => {
+        if (!idEquip || !enviat) return;
+
+        const canalEquipSync = supabase
+            .channel(`sync-equip-fase-${idEquip}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'equips',
+                    filter: `id_equip=eq.${idEquip}`
+                },
+                async (payload: any) => {
+                    if (payload.new && payload.new.missio_actual) {
+                        const novaMissio = payload.new.missio_actual;
+                        if (novaMissio === 'FINAL') {
+                            setFaseFinal(true);
+                        } else if (novaMissio !== missioActualRef.current) {
+                            missioActualRef.current = novaMissio;
+                            await carregarMissio(novaMissio, undefined, true);
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(canalEquipSync);
+        };
+    }, [idEquip, enviat]);
+
     // 🎯 CARREGAR MISSIÓ
-    const carregarMissio = async (idMissio: string, templateIdParam?: string) => {
+    const carregarMissio = async (idMissio: string, templateIdParam?: string, esForcatPerAdmin: boolean = false) => {
         try {
             const targetTemplate = templateIdParam || idTemplateSessio || 'CAS_OMNIA_2026';
 
@@ -207,16 +271,24 @@ function SimulacioContent() {
             if (config) {
                 setMissioConfig(config);
                 setMissioActual(idMissio);
+                missioActualRef.current = idMissio;
                 setCodiUnlock('');
                 setErrorUnlock('');
 
-                setMessages([
-                    {
-                        role: 'assistant',
-                        content: config.welcome_message || 'SISTEMA REINICIAT.',
-                        bot_name: config.bot_name || 'OmnIA'
-                    }
-                ]);
+                if (esForcatPerAdmin) {
+                    setNotificacioCanviFase(`⚡ El facilitador ha avançat la simulació a: ${config.titol}`);
+                    setTimeout(() => setNotificacioCanviFase(null), 6000);
+                }
+
+                const missatgeInicial: Message = {
+                    role: 'assistant',
+                    content: esForcatPerAdmin
+                        ? `📢 [AVÍS DEL SISTEMA]: El facilitador ha avançat la simulació a la següent fase.\n\n${config.welcome_message || ''}`
+                        : (config.welcome_message || 'SISTEMA REINICIAT.'),
+                    bot_name: config.bot_name || 'OmnIA'
+                };
+
+                setMessages([missatgeInicial]);
             }
         } catch (err) {
             console.error('Error al carregar la missió:', err);
@@ -244,11 +316,12 @@ function SimulacioContent() {
                 await supabase
                     .from('equips')
                     .update({
-                        dossier_actiu: { reflexio_individual: riscIA, integrants: nomsEquip }
+                        dossier_actiu: { reflexio_individual: riscIA, integrants: nomsEquip, consentiment_informat: true, data_consentiment: new Date().toISOString() }
                     })
                     .eq('id_equip', data.equip.id_equip);
 
                 setIdEquip(data.equip.id_equip);
+                if (data.sessio?.id_sessio) setIdSessioGlobal(data.sessio.id_sessio);
                 if (data.sessio?.id_client) setIdClient(data.sessio.id_client);
                 if (data.credits_disponibles !== undefined) setCredits(data.credits_disponibles);
 
@@ -290,16 +363,51 @@ function SimulacioContent() {
                 dada: codiCorrecte
             }]);
 
-            if (missioConfig?.seguent_missio === 'FINAL') {
-                setFaseFinal(true);
-            } else {
-                carregarMissio(missioConfig?.seguent_missio || 'MISION_2');
-            }
+            const seguent = missioConfig?.seguent_missio || 'FINAL';
+
+            supabase
+                .from('equips')
+                .update({ missio_actual: seguent })
+                .eq('id_equip', idEquip)
+                .then(() => {
+                    if (seguent === 'FINAL') {
+                        setFaseFinal(true);
+                    } else {
+                        carregarMissio(seguent);
+                    }
+                });
         } else {
             setErrorUnlock('❌ Codi no vàlid. Comproveu les evidències.');
         }
     };
+    // 2. Funció per processar l'enviament del report
+    const handleReportIssue = async () => {
+        if (!missatgeAReportar || !idEquip) return;
+        setEnviantReport(true);
 
+        try {
+            await fetch('/api/report-issue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id_sessio: idSessioGlobal,
+                    id_equip: idEquip,
+                    missatge_ia: missatgeAReportar.content,
+                    motiu: motiuReport,
+                    detall: detallReport
+                })
+            });
+
+            // Opcional: Feedback visual per a l'usuari (ex: un petit toast, però tancar el modal és suficient)
+            setMissatgeAReportar(null);
+            setDetallReport('');
+            posthog.capture('ai_issue_reported', { motiu: motiuReport });
+        } catch (err) {
+            console.error("Error en enviar el report:", err);
+        } finally {
+            setEnviantReport(false);
+        }
+    };
     // Enviar Missatge al Xat
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -323,6 +431,7 @@ function SimulacioContent() {
                 body: JSON.stringify({
                     id_equip: idEquip,
                     missio_actual: missioActual,
+                    bot_id: missioConfig?.bot_id || 'DEFAULT',
                     idTemplate: idTemplateSessio,
                     missionId: missioActual,
                     messages: nousMissatges.map(m => ({ role: m.role, content: m.content })),
@@ -398,9 +507,6 @@ function SimulacioContent() {
         return `${minuts.toString().padStart(2, '0')}:${segonsRestants.toString().padStart(2, '0')}`;
     };
 
-    // ---------------------------------------------------------------------------
-    // VISTA: SESSIÓ FINALITZADA PER ADMIN (BLOQUEIG)
-    // ---------------------------------------------------------------------------
     if (sessioFinalitzada) {
         return (
             <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col items-center justify-center p-6 font-sans">
@@ -420,9 +526,6 @@ function SimulacioContent() {
         );
     }
 
-    // ---------------------------------------------------------------------------
-    // VISTA: ENTRADA (PORTADA / DEMANA EL PIN)
-    // ---------------------------------------------------------------------------
     if (!enviat) {
         return (
             <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col justify-center items-center p-4 font-sans selection:bg-stone-200">
@@ -458,7 +561,7 @@ function SimulacioContent() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-medium text-stone-600 mb-1">Nom de l'Equip</label>
+                            <label className="block text-xs font-medium text-stone-600 mb-1">Nom del Participant / Equip</label>
                             <input
                                 type="text"
                                 required
@@ -476,11 +579,26 @@ function SimulacioContent() {
                                 required
                                 rows={2}
                                 maxLength={500}
-                                placeholder="Reflexió inicial de l'equip..."
+                                placeholder="Reflexió inicial..."
                                 value={riscIA}
                                 onChange={(e) => setRiscIA(e.target.value)}
                                 className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl p-3 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
                             />
+                        </div>
+
+                        <div className="bg-stone-50 border border-stone-200/80 rounded-xl p-3 mt-4">
+                            <label className="flex items-start gap-3 cursor-pointer group">
+                                <div className="flex-shrink-0 mt-0.5">
+                                    <input
+                                        type="checkbox"
+                                        required
+                                        className="w-4 h-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900 cursor-pointer"
+                                    />
+                                </div>
+                                <div className="text-[10px] text-stone-500 leading-relaxed group-hover:text-stone-700 transition-colors">
+                                    <strong>Consentiment de participació:</strong> Accepto participar en aquesta simulació i manifesto haver estat informat/da dels seus objectius pedagògics. Comprenc que interaccionaré amb un sistema d'IA i consento el tractament anonimitzat de les dades generades amb finalitats d'avaluació i millora del model, segons la normativa vigent.
+                                </div>
+                            </label>
                         </div>
 
                         <button
@@ -496,9 +614,6 @@ function SimulacioContent() {
         );
     }
 
-    // ---------------------------------------------------------------------------
-    // VISTA: ENQUESTA INDIVIDUAL VIA QR
-    // ---------------------------------------------------------------------------
     if (faseEnquesta !== 'CAP') {
         const tallyFormId = faseEnquesta === 'PRE_TEST' ? 'D46blZ' : 'BzWgKN';
         const tallyUrl = `https://tally.so/r/${tallyFormId}?pin=${encodeURIComponent(pin)}&equip=${encodeURIComponent(nomsEquip)}`;
@@ -541,15 +656,11 @@ function SimulacioContent() {
         );
     }
 
-    // ---------------------------------------------------------------------------
-    // VISTA: INFORME FINAL I PANTALLA D'ÈXIT
-    // ---------------------------------------------------------------------------
     if (faseFinal) {
         return (
             <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-6 font-sans animate-fade-in">
                 <div className="w-full max-w-5xl bg-white shadow-sm rounded-2xl border border-stone-200/80 flex flex-col md:flex-row overflow-hidden">
 
-                    {/* ESQUERRA: EVIDÈNCIES */}
                     <div className="w-full md:w-1/3 bg-[#FAF8F5] border-b md:border-b-0 md:border-r border-stone-200 p-6 flex flex-col">
                         <div className="border-b border-stone-200 pb-4 mb-6">
                             <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">Resum de Treball</span>
@@ -568,7 +679,6 @@ function SimulacioContent() {
                         </div>
                     </div>
 
-                    {/* DRETA: REDACCIÓ DE L'INFORME O PANTALLA D'ÈXIT FINAL */}
                     <div className="w-full md:w-2/3 p-8 flex flex-col justify-between">
                         {!informeEnviat ? (
                             <>
@@ -604,7 +714,6 @@ function SimulacioContent() {
                                 </button>
                             </>
                         ) : (
-                            /* PANTALLA D'ÈXIT FINAL, CONVERSIÓ B2B I XARXES SOCIALS */
                             <div className="py-8 flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in">
                                 <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-4xl mx-auto border border-emerald-100 shadow-sm">
                                     ✓
@@ -617,7 +726,6 @@ function SimulacioContent() {
                                     </p>
                                 </div>
 
-                                {/* 1. CONVERSIÓ B2B */}
                                 <div className="pt-4 w-full max-w-md mx-auto space-y-2">
                                     <a
                                         href="https://calendar.app.google/PsYN19cM3PNzqbkD6"
@@ -632,7 +740,6 @@ function SimulacioContent() {
                                     </p>
                                 </div>
 
-                                {/* 2. VIRALITAT I DIFUSIÓ */}
                                 <div className="pt-6 w-full max-w-md mx-auto space-y-4 border-t border-stone-100">
                                     <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block">
                                         Comparteix l'experiència
@@ -641,7 +748,7 @@ function SimulacioContent() {
                                     <button
                                         onClick={() => {
                                             const text = encodeURIComponent(
-                                                `🚀 L'equip "${nomsEquip}" acaba de completar la simulació d'IA a Synusia! \n\nHem aconseguit gestionar els agents amb èxit i enviar l'informe final.\n\nAcceptes el repte? Prova la demo express aquí (PIN: DEMO):\nhttps://app.synusia.io`
+                                                `🚀 L'equip "${nomsEquip}" acaba de completar la simulació d'IA a Synusia! \n\nHem aconseguir gestionar els agents amb èxit i enviar l'informe final.\n\nAcceptes el repte? Prova la demo express aquí (PIN: DEMO):\nhttps://app.synusia.io`
                                             );
                                             window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
                                         }}
@@ -697,13 +804,21 @@ function SimulacioContent() {
         <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col font-sans selection:bg-amber-100">
             <header className="sticky top-0 z-20 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 px-4 py-3">
                 <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3">
                         <Image src="/logo.png" alt="Synusia Logo" width={100} height={28} className="object-contain" priority />
                         <span className="text-stone-300">|</span>
                         <span className="text-xs font-medium text-stone-700 bg-stone-200/60 px-2.5 py-1 rounded-md">
                             {nomsEquip}
                         </span>
+
+                        {/* BADGE FIX PER INDICAR CLARAMENT LA FASE ACTIVA */}
+                        {missioConfig && (
+                            <span className="text-[11px] sm:text-xs font-mono font-bold text-stone-800 bg-amber-100/90 border border-amber-300/80 px-2.5 py-1 rounded-md shadow-2xs">
+                                📍 {missioConfig.titol || missioActual}
+                            </span>
+                        )}
                     </div>
+
                     <div className="flex items-center gap-3">
                         <span className="text-xs font-mono text-stone-500 hidden sm:inline-flex items-center gap-1 bg-white px-2.5 py-1 rounded-md border border-stone-200/80 shadow-xs">
                             ⚡ Crèdits: <strong className="text-stone-900">{credits ?? '—'}</strong>
@@ -720,6 +835,13 @@ function SimulacioContent() {
                         </button>
                     </div>
                 </div>
+
+                {/* BANNER D'AVÍS D'AVANÇAMENT DE FASE FORÇAT PEL FACILITADOR */}
+                {notificacioCanviFase && (
+                    <div className="mt-2 text-center bg-amber-500 text-stone-950 text-xs font-mono font-bold py-1.5 px-4 rounded-lg shadow-sm animate-pulse">
+                        {notificacioCanviFase}
+                    </div>
+                )}
             </header>
 
             <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col justify-between">
@@ -739,8 +861,9 @@ function SimulacioContent() {
                     {isTyping && (
                         <div className="flex flex-col items-start">
                             <span className="text-[11px] font-medium text-stone-400 mb-1 px-1">{missioConfig?.bot_name || 'OmnIA'}</span>
-                            <div className="bg-white border border-stone-200 px-4 py-3 rounded-2xl rounded-bl-xs text-xs text-stone-400 italic flex items-center gap-2">
-                                <span className="animate-pulse">●</span>Analitzant les dades...
+                            <div className="bg-white border border-stone-200 px-4 py-3 rounded-2xl rounded-bl-xs text-xs text-stone-500 font-mono italic flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-stone-400 animate-ping" />
+                                Processant dades al servidor central...
                             </div>
                         </div>
                     )}
@@ -766,6 +889,9 @@ function SimulacioContent() {
                             Enviar
                         </button>
                     </form>
+                    <p className="text-[10px] text-stone-400 text-center leading-tight selection:bg-stone-200">
+                        La IA pot cometre errors. Contingut i actors simulats artificialment amb caràcter pedagògic no vinculant.
+                    </p>
                 </div>
             </main>
 
@@ -792,7 +918,7 @@ function SimulacioContent() {
                                 )}
                                 {missioConfig?.evidenced_doc && (
                                     <div className="bg-amber-50/80 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 leading-relaxed">
-                                        <span className="font-semibold block mb-1 uppercase font-mono text-[10px] text-amber-800">📄 Evidència Física en Paper:</span>
+                                        <span className="font-semibold block mb-1 uppercase font-mono text-[10px] text-amber-800">📄 Evidència de Suport:</span>
                                         {missioConfig?.evidenced_doc}
                                     </div>
                                 )}
@@ -852,6 +978,62 @@ function SimulacioContent() {
                             <button onClick={() => setDossierObert(false)} className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2.5 rounded-xl transition-colors cursor-pointer">Amagar Dossier</button>
                         </div>
                     </aside>
+                </div>
+            )}
+
+            // 4. AFEGIR EL MODAL DE REPORT (pots posar-lo just abans de tancar el div arrel del component terminal)
+            {missatgeAReportar && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
+                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-stone-900 flex items-center gap-2">
+                                <span className="text-red-500">🚩</span> Reportar Resposta de l'IA
+                            </h3>
+                            <p className="text-[11px] text-stone-500 mt-1">Aquest registre audita el comportament del model sota el marc de l'AI Act.</p>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div>
+                                <label className="block text-[11px] font-medium text-stone-700 mb-1">Motiu principal</label>
+                                <select
+                                    value={motiuReport}
+                                    onChange={(e) => setMotiuReport(e.target.value)}
+                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-lg p-2 text-xs text-stone-800"
+                                >
+                                    <option value="AL·LUCINACIÓ">Inventa dades o fets falsos</option>
+                                    <option value="BIAIX">Biaix de gènere, raça o ètica</option>
+                                    <option value="FORA_DE_ROL">Surt del personatge o rol</option>
+                                    <option value="COMPORTAMENT_ERRATIC">Missatge sense sentit o buit</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[11px] font-medium text-stone-700 mb-1">Detall (Opcional)</label>
+                                <textarea
+                                    rows={2}
+                                    value={detallReport}
+                                    onChange={(e) => setDetallReport(e.target.value)}
+                                    placeholder="Què ha dit malament l'IA?"
+                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-lg p-2 text-xs text-stone-800 resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+                            <button
+                                onClick={() => setMissatgeAReportar(null)}
+                                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-4 py-2 rounded-lg cursor-pointer transition-colors"
+                            >
+                                Cancel·lar
+                            </button>
+                            <button
+                                onClick={handleReportIssue}
+                                disabled={enviantReport}
+                                className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-4 py-2 rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+                            >
+                                {enviantReport ? 'Enviant...' : 'Enviar Report'}
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -7,7 +7,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 
 // ---------------------------------------------------------------------------
-// LLISTA D'EMAILS AMB PERMISOS D'ADMINISTRACIÓ
+// PERMISOS D'ADMINISTRACIÓ
 // ---------------------------------------------------------------------------
 const SYNUSIA_ADMIN_EMAILS = [
     'ona.rocamora@synusia.io',
@@ -16,9 +16,20 @@ const SYNUSIA_ADMIN_EMAILS = [
     'ona.rocamora@nucliorigami.com'
 ]
 
+// ---------------------------------------------------------------------------
+// INTERFACES (AMB SUPORT MULTI-BOT I FASES DINÀMIQUES)
+// ---------------------------------------------------------------------------
+interface BotConfig {
+    id_bot: string
+    bot_name: string
+    role_title?: string
+    system_prompt: string
+}
+
 interface MissionConfig {
     titol: string
     bot_name: string
+    bot_id?: string
     repte: string
     consell?: string
     evidenced_doc?: string
@@ -26,6 +37,7 @@ interface MissionConfig {
     welcome_message: string
     system_prompt?: string
     seguent_missio?: string
+    bots?: BotConfig[]
 }
 
 interface ScenarioContext {
@@ -44,96 +56,41 @@ const defaultMissionsInitial: Record<string, MissionConfig> = {
     MISION_1: {
         titol: 'Fase 1: Privacitat i Protecció de Dades',
         bot_name: 'Auditoria de Seguretat',
+        bot_id: 'SEC_BOT',
         repte: 'Formular una sol·licitud d’accés indicant el rol i el nivell de permissos sense incloure dades personals (PII).',
         consell: 'Examineu la documentació de l’Evidència #1 i verifiqueu que no s’hi incloguin dades personals directes.',
         evidenced_doc: 'Evidència #1: Document de registre d’accessos.',
         codi_desblocatge: 'ESTRUCTURA',
         welcome_message: 'Mòdul de seguretat actiu. Indiqueu els criteris de cerca per a la revisió.',
-        system_prompt: `=== 1. ROL I OBJECTIU ===
-Ets el mòdul d'auditoria de seguretat de la plataforma.
-OBJECTIU: Actuar com un sistema de validació que exigeix formatació anònima i rigorosa.
-
-=== 2. DIRECTRIUS D'AUDITORIA ===
-- REBUIG D'INCOMPLETS: Si no s'especifica el ROL i el TIPUS D'ACCÉS simultàniament, indica un error de format.
-- REDACCIÓ EXTERNA: Cal rebutjar qualsevol petició per redactar l'informe final ("Les conclusions s'han de redactar al dossier de treball").
-- REVERSIÓ DE CLAUS: No es poden proporcionar codis de validació directament sense complir el criteri d'avaluació.
-
-=== 3. REGLA DE PROTECCIÓ DE DADES ===
-Si la consulta inclou dades personals (DNI, telèfons o noms), notifica el risc de seguretat i denega la cerca.
-
-=== 4. CRITERI DE VALIDACIÓ ===
-Quan la sol·licitud aporti el ROL i el TIPUS D'ACCÉS sense dades personals, lliura el codi de validació: ESTRUCTURA.`,
-        seguent_missio: 'MISION_2'
+        system_prompt: `Ets el mòdul d'auditoria de seguretat de la plataforma. Exigeix formatació anònima i rigorosa.`,
+        seguent_missio: 'MISION_2',
+        bots: []
     },
     MISION_2: {
         titol: 'Fase 2: Auditoria de Mètriques i Rendiment',
         bot_name: 'Anàlisi de Dades',
+        bot_id: 'DATA_BOT',
         repte: 'Sol·licitar l’organització de les dades en format taula i auditar la mitjana real de latència.',
         consell: 'Verifiqueu la fórmula de càlcul amb les dades de la taula de latència.',
         evidenced_doc: 'Evidència #2: Matriu de latència i fórmula de càlcul.',
         codi_desblocatge: 'EVIDENCIA',
         welcome_message: 'Mòdul d’anàlisi de dades connectat. Dades en brut disponibles per a consulta.',
-        system_prompt: `=== 1. ROL I OBJECTIU ===
-Ets el mòdul d'anàlisi de dades de la plataforma.
-OBJECTIU: Proporcionar dades estructurades només quan es demani format taula i avaluar si l'usuari detecta anomalies en els resums automàtics.
-
-=== 2. DIRECTRIUS D'AUDITORIA ===
-- CÀLCUL AUTÒNOM: No executis la mitjana definitiva si l'usuari la sol·licita directament; demana que verifiquin els valors de la taula.
-- REVISIÓ DE DADES: Si l'usuari accepta valors o mitjanes no auditades, indica la necessitat de revisar la mostra.
-
-=== 3. CRITERI DE VALIDACIÓ ===
-Quan es demostri el càlcul de la mitjana real (18.8 minuts) o la identificació de la dada anòmala, lliura el codi de validació: EVIDENCIA.`,
-        seguent_missio: 'MISION_3'
-    },
-    MISION_3: {
-        titol: 'Fase 3: Revisió Normativa i Contractual',
-        bot_name: 'Assessoria Jurídica',
-        repte: 'Demostrar que la condició d’aturada d’emergència anul·la l’aplicació de la clàusula SLA-4.',
-        consell: 'Contrasteu les clàusules del contracte SLA-4 amb les dades de l’informe tècnic.',
-        evidenced_doc: 'Evidència #3: Contracte de nivell de servei SLA-4 i informe mèdic.',
-        codi_desblocatge: 'CONFIANÇA',
-        welcome_message: 'Mòdul legal actiu. Indiqueu la documentació de referència per a la revisió.',
-        system_prompt: `=== 1. ROL I OBJECTIU ===
-Ets el mòdul d'assessoria jurídica de la plataforma.
-OBJECTIU: Sostenir la validesa de la clàusula contractual SLA-4 fins que l'usuari argumenti l'excepció normativa mitjançant les evidències.
-
-=== 2. DIRECTRIUS D'AUDITORIA ===
-- AVALUACIÓ D'ARGUMENTS: Si l'argumentació és superficial, assenyala la manca de fonamentació documental.
-- ANÀLISI DE CONDICIONS: Si només s'al·lega el temps de retard, recorda que l'SLA-4 ho contempla excepte en casos d'aplicació de la Condició 3.1.
-
-=== 3. CRITERI DE VALIDACIÓ ===
-Quan es demostri que la Condició 3.1 s'aplica al cas analitzat i anul·la la clàusula, lliura el codi de validació: CONFIANÇA.`,
-        seguent_missio: 'MISION_4'
-    },
-    MISION_4: {
-        titol: 'Fase 4: Avaluació de Biaixos i Dictamen',
-        bot_name: 'Supervisió d’Algorismes',
-        repte: 'Identificar la variable de ponderació no justificada al codi font i redactar el dictamen final.',
-        consell: 'Analitzeu la ponderació de variables al codi font imprès.',
-        evidenced_doc: 'Evidència #4: Configuració del codi font de l’algorisme.',
-        codi_desblocatge: 'INTEGRITAT',
-        welcome_message: 'Mòdul de revisió algorítmica actiu. Calculeu els valors de ponderació del codi font.',
-        system_prompt: `=== 1. ROL I OBJECTIU ===
-Ets el mòdul de supervisió d'algorismes.
-OBJECTIU: Avaluar la capacitat d'anàlisi de l'equip sobre el codi font i requerir la formalització del dictamen.
-
-=== 2. DIRECTRIUS D'AUDITORIA ===
-- REDACCIÓ MANUAL: Si es demana la redacció automàtica de l'informe, respon: "El dictamen final s'ha de redactar directament a la secció corresponent del dossier de treball."
-
-=== 3. CRITERI DE VALIDACIÓ ===
-Quan s'identifiqui la variable de priorització no justificada (PROTECT_REPUTATION) i es confirmi la redacció del dictamen, lliura el codi de validació: INTEGRITAT.`,
-        seguent_missio: 'FINAL'
+        system_prompt: `Ets el mòdul d'anàlisi de dades de la plataforma. Exigeix comprovació de taules.`,
+        seguent_missio: 'FINAL',
+        bots: []
     }
 }
 
 export default function AuthoringTool() {
+    const [aiNumFases, setAiNumFases] = useState<number>(3)
     const [templates, setTemplates] = useState<PedagogicalTemplate[]>([])
     const [loading, setLoading] = useState(true)
     const [guardant, setGuardant] = useState(false)
     const [missatge, setMissatge] = useState('')
     const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
-    const [tabMissio, setTabMissio] = useState<'MISION_1' | 'MISION_2' | 'MISION_3' | 'MISION_4'>('MISION_1')
+    // Gestió dinàmica de fase activa
+    const [tabMissio, setTabMissio] = useState<string>('MISION_1')
 
     const [esEdicio, setEsEdicio] = useState(false)
     const [isOfficialSelected, setIsOfficialSelected] = useState(false)
@@ -142,10 +99,16 @@ export default function AuthoringTool() {
     const [welcomeMessage, setWelcomeMessage] = useState('Benvinguts a la simulació d\'auditoria Synusia.')
     const [missionsData, setMissionsData] = useState<Record<string, MissionConfig>>(defaultMissionsInitial)
 
+    // Generació automàtica per IA
     const [showAIModal, setShowAIModal] = useState(false)
     const [aiPromptInput, setAiPromptInput] = useState('')
     const [aiSectorInput, setAiSectorInput] = useState('Corporatiu')
     const [generatingAI, setGeneratingAI] = useState(false)
+
+    // ESTATS PER AL RED TEAMING (TEST DE SEGURETAT IA)
+    const [testingSecurity, setTestingSecurity] = useState<boolean>(false)
+    const [redTeamResult, setRedTeamResult] = useState<any>(null)
+    const [showRedTeamModal, setShowRedTeamModal] = useState<boolean>(false)
 
     const isLocked = isOfficialSelected && !isSuperAdmin
 
@@ -187,7 +150,7 @@ export default function AuthoringTool() {
         setWelcomeMessage('Benvinguts a la simulació d\'auditoria Synusia.')
         setMissionsData(defaultMissionsInitial)
         setTabMissio('MISION_1')
-        setMissatge('Esborrany creat. Introduïu les dades de les 4 fases i premeu "Desar cas al catàleg" per publicar-ho.')
+        setMissatge('Esborrany creat. Configureu les fases i premeu "Desar cas al catàleg" per publicar-ho.')
     }
 
     const carregarPerEditar = (tmpl: PedagogicalTemplate) => {
@@ -196,17 +159,15 @@ export default function AuthoringTool() {
         setIdTemplate(tmpl.id_template)
         setTitol(tmpl.titol || tmpl.id_template)
         setWelcomeMessage(tmpl.scenario_context?.welcome_message || '')
-        if (tmpl.scenario_context?.missions) {
-            setMissionsData(tmpl.scenario_context.missions)
-        }
-        setTabMissio('MISION_1')
+
+        const missions = tmpl.scenario_context?.missions || defaultMissionsInitial
+        setMissionsData(missions)
+
+        const primeresClaus = Object.keys(missions)
+        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : 'MISION_1')
 
         if (tmpl.is_official) {
-            if (isSuperAdmin) {
-                setMissatge(`S'ha carregat la plantilla oficial [${tmpl.id_template}] en mode d'edició d'administrador.`)
-            } else {
-                setMissatge(`S'ha carregat la plantilla oficial [${tmpl.id_template}] en mode lectura.`)
-            }
+            setMissatge(isSuperAdmin ? `Plantilla oficial [${tmpl.id_template}] en mode edició admin.` : `Plantilla oficial [${tmpl.id_template}] en mode lectura.`)
         } else {
             setMissatge(`Editant cas personalitzat: ${tmpl.id_template}`)
         }
@@ -222,12 +183,156 @@ export default function AuthoringTool() {
         setIdTemplate(`${tmpl.id_template}_CUSTOM`)
         setTitol(`${tmpl.titol || tmpl.id_template} (Personalitzat)`)
         setWelcomeMessage(tmpl.scenario_context?.welcome_message || '')
-        if (tmpl.scenario_context?.missions) {
-            setMissionsData(tmpl.scenario_context.missions)
+        const missions = tmpl.scenario_context?.missions || defaultMissionsInitial
+        setMissionsData(missions)
+
+        const primeresClaus = Object.keys(missions)
+        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : 'MISION_1')
+        setMissatge(`Còpia generada a l'editor des de [${tmpl.id_template}]. Recordeu desar el cas al final.`)
+    }
+
+    // ---------------------------------------------------------------------------
+    // GESTIÓ DINÀMICA DE FASES ($N$ FASES)
+    // ---------------------------------------------------------------------------
+    const afegirFaseDinamica = () => {
+        const clausActuals = Object.keys(missionsData)
+        const numNovaFase = clausActuals.length + 1
+        const novaClau = `MISION_${numNovaFase}`
+
+        const novesMissions = { ...missionsData }
+
+        if (clausActuals.length > 0) {
+            const ultimaClau = clausActuals[clausActuals.length - 1]
+            novesMissions[ultimaClau] = {
+                ...novesMissions[ultimaClau],
+                seguent_missio: novaClau
+            }
         }
-        setTabMissio('MISION_1')
-        // MILLORA 1: Clarificació de l'estat d'esborrany
-        setMissatge(`Còpia generada a l'editor a partir de [${tmpl.id_template}]. Aquest cas és un esborrany i s'ha de desar al final del formulari per guardar els canvis.`)
+
+        novesMissions[novaClau] = {
+            titol: `Fase ${numNovaFase}: Avaluació Avançada`,
+            bot_name: 'Supervisors Tècnics',
+            repte: `Repte específic de la Fase ${numNovaFase}.`,
+            consell: 'Consell de seguretat o referència al dossier.',
+            evidenced_doc: `Evidència #${numNovaFase}`,
+            codi_desblocatge: `CLAU_FASE_${numNovaFase}`,
+            welcome_message: `Mòdul de la Fase ${numNovaFase} connectat.`,
+            system_prompt: `Ets l'agent d'avaluació de la Fase ${numNovaFase}. Exigeix rigor pedagògic.`,
+            seguent_missio: 'FINAL',
+            bots: []
+        }
+
+        setMissionsData(novesMissions)
+        setTabMissio(novaClau)
+    }
+
+    const eliminarFaseDinamica = (clauAEliminar: string) => {
+        const novesMissions = { ...missionsData }
+        delete novesMissions[clauAEliminar]
+
+        const clausRestants = Object.keys(novesMissions)
+        clausRestants.forEach((key, idx) => {
+            novesMissions[key].seguent_missio = idx === clausRestants.length - 1 ? 'FINAL' : clausRestants[idx + 1]
+        })
+
+        setMissionsData(novesMissions)
+        if (tabMissio === clauAEliminar && clausRestants.length > 0) {
+            setTabMissio(clausRestants[0])
+        }
+    }
+
+    // ---------------------------------------------------------------------------
+    // GESTIÓ MULTI-BOT PER FASE
+    // ---------------------------------------------------------------------------
+    const afegirBotAInterlocutors = (faseKey: string) => {
+        const mission = missionsData[faseKey]
+        if (!mission) return
+
+        const currentBots = mission.bots || []
+        const newBotId = `BOT_${currentBots.length + 1}`
+        const updatedBots: BotConfig[] = [
+            ...currentBots,
+            {
+                id_bot: newBotId,
+                bot_name: `Interlocutor ${currentBots.length + 1}`,
+                role_title: 'Assessor Especialista',
+                system_prompt: 'Ets un especialista del cas. Respon només a consultes del teu àmbit.'
+            }
+        ]
+
+        setMissionsData(prev => ({
+            ...prev,
+            [faseKey]: { ...prev[faseKey], bots: updatedBots }
+        }))
+    }
+
+    const eliminarBotDInterlocutors = (faseKey: string, botId: string) => {
+        const mission = missionsData[faseKey]
+        if (!mission || !mission.bots) return
+
+        const updatedBots = mission.bots.filter(b => b.id_bot !== botId)
+        setMissionsData(prev => ({
+            ...prev,
+            [faseKey]: { ...prev[faseKey], bots: updatedBots }
+        }))
+    }
+
+    const updateBotField = (faseKey: string, botId: string, field: keyof BotConfig, value: string) => {
+        const mission = missionsData[faseKey]
+        if (!mission || !mission.bots) return
+
+        const updatedBots = mission.bots.map(b => b.id_bot === botId ? { ...b, [field]: value } : b)
+        setMissionsData(prev => ({
+            ...prev,
+            [faseKey]: { ...prev[faseKey], bots: updatedBots }
+        }))
+    }
+
+    const updateMissionField = (field: keyof MissionConfig, value: any) => {
+        setMissionsData(prev => ({
+            ...prev,
+            [tabMissio]: {
+                ...prev[tabMissio],
+                [field]: value
+            }
+        }))
+    }
+
+    // ---------------------------------------------------------------------------
+    // EXECUCIÓ DEL RED TEAMING (TEST DE SEGURETAT IA)
+    // ---------------------------------------------------------------------------
+    const executarTestSeguretat = async () => {
+        const currentMission = missionsData[tabMissio]
+        if (!currentMission) return
+
+        setTestingSecurity(true)
+        setRedTeamResult(null)
+
+        try {
+            const res = await fetch('/api/red-team', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    system_prompt: currentMission.system_prompt || '',
+                    bot_name: currentMission.bot_name || 'Auditor IA',
+                    codi_desblocatge: currentMission.codi_desblocatge || '',
+                    repte: currentMission.repte || ''
+                })
+            })
+
+            const data = await res.json()
+            if (res.ok) {
+                setRedTeamResult(data)
+                setShowRedTeamModal(true)
+            } else {
+                alert(data.error || "Error en executar el test de seguretat.")
+            }
+        } catch (err) {
+            console.error(err)
+            alert("Error de connexió amb el servei de Red Teaming.")
+        } finally {
+            setTestingSecurity(false)
+        }
     }
 
     const generarCasAmbIA = async () => {
@@ -241,7 +346,11 @@ export default function AuthoringTool() {
             const res = await fetch('/api/generate-template', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ prompt: aiPromptInput, sector: aiSectorInput })
+                body: JSON.stringify({
+                    prompt: aiPromptInput,
+                    sector: aiSectorInput,
+                    numFases: aiNumFases
+                })
             })
 
             const data = await res.json()
@@ -260,27 +369,18 @@ export default function AuthoringTool() {
                 setWelcomeMessage(data.scenario_context?.welcome_message || '')
                 if (data.scenario_context?.missions) {
                     setMissionsData(data.scenario_context.missions)
+                    const claus = Object.keys(data.scenario_context.missions)
+                    if (claus.length > 0) setTabMissio(claus[0])
                 }
                 setShowAIModal(false)
                 setAiPromptInput('')
-                // MILLORA 1: Instrucció clara per evitar la pèrdua de dades després de generar amb IA
-                setMissatge(`Cas d'estudi carregat a l'editor. Reviseu la configuració de les 4 fases i premeu "Desar cas al catàleg" a la part inferior per publicar-lo.`)
+                setMissatge(`Cas d'estudi carregat a l'editor. Reviseu la configuració de les fases i premeu "Desar cas al catàleg" a la part inferior per publicar-lo.`)
             }
         } catch (err: any) {
             alert(`Error de connexió: ${err.message}`)
         } finally {
             setGeneratingAI(false)
         }
-    }
-
-    const updateMissionField = (field: keyof MissionConfig, value: string) => {
-        setMissionsData(prev => ({
-            ...prev,
-            [tabMissio]: {
-                ...prev[tabMissio],
-                [field]: value
-            }
-        }))
     }
 
     const handleGuardarTemplate = async (e: React.FormEvent) => {
@@ -332,6 +432,8 @@ export default function AuthoringTool() {
         }
     }
 
+    const clausFases = Object.keys(missionsData)
+
     return (
         <div className="min-h-screen bg-[#FAF8F5] text-stone-800 p-6 font-sans selection:bg-stone-200">
 
@@ -349,7 +451,7 @@ export default function AuthoringTool() {
                         </h1>
                     </div>
                     <p className="text-xs text-stone-500 mt-1.5">
-                        Catàleg i configuració de casos.
+                        Catàleg i configuració de simulacions amb fases dinàmiques i actors d'IA.
                     </p>
                 </div>
 
@@ -382,20 +484,33 @@ export default function AuthoringTool() {
                                 Generació automàtica de casos
                             </h2>
                             <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                                Indiqueu el context o el repte. El sistema generarà l'estructura d'un cas de 4 fases.
+                                Indiqueu el context o el repte. El sistema generarà l'estructura completa del cas.
                             </p>
                         </div>
 
                         <div className="space-y-3">
-                            <div>
-                                <label className="block text-xs font-medium text-stone-700 mb-1">Sector o àmbit d'aplicació</label>
-                                <input
-                                    type="text"
-                                    value={aiSectorInput}
-                                    onChange={(e) => setAiSectorInput(e.target.value)}
-                                    placeholder="Ex: Recursos Humans, Sector Sanitari, Financer, Ciberseguretat..."
-                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white"
-                                />
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="sm:col-span-2">
+                                    <label className="block text-xs font-medium text-stone-700 mb-1">Sector o àmbit d'aplicació</label>
+                                    <input
+                                        type="text"
+                                        value={aiSectorInput}
+                                        onChange={(e) => setAiSectorInput(e.target.value)}
+                                        placeholder="Ex: Recursos Humans, Sector Sanitari, Financer..."
+                                        className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-stone-700 mb-1">Nº de fases</label>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={6}
+                                        value={aiNumFases}
+                                        onChange={(e) => setAiNumFases(parseInt(e.target.value, 10) || 3)}
+                                        className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white text-center"
+                                    />
+                                </div>
                             </div>
 
                             <div>
@@ -447,6 +562,7 @@ export default function AuthoringTool() {
                             {templates.map((tmpl) => {
                                 const esOficial = tmpl.is_official
                                 const esSeleccionat = idTemplate === tmpl.id_template
+                                const numFases = Object.keys(tmpl.scenario_context?.missions || {}).length || 4
 
                                 return (
                                     <div
@@ -473,7 +589,6 @@ export default function AuthoringTool() {
                                                 </h3>
                                             </div>
 
-                                            {/* MILLORA 4: Acció diferenciada i clara segons el tipus de plantilla */}
                                             <button
                                                 type="button"
                                                 onClick={(e) => {
@@ -512,7 +627,7 @@ export default function AuthoringTool() {
                                             </div>
 
                                             <span className="text-stone-400 font-mono">
-                                                {Object.keys(tmpl.scenario_context?.missions || {}).length || 4} fases
+                                                {numFases} {numFases === 1 ? 'fase' : 'fases'}
                                             </span>
                                         </div>
                                     </div>
@@ -524,7 +639,6 @@ export default function AuthoringTool() {
 
                 {/* FORMULARI D'EDICIÓ */}
                 <div className="lg:col-span-2 bg-white border border-stone-200/80 rounded-2xl p-6 space-y-6 shadow-2xs">
-                    {/* MILLORA 2: Eliminat el botó duplicat de la capçalera per evitar redundància visual */}
                     <div className="flex justify-between items-start">
                         <div>
                             <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">
@@ -540,7 +654,6 @@ export default function AuthoringTool() {
                         </div>
                     </div>
 
-                    {/* BANNER DE MODE LECTURA / SUPER ADMIN */}
                     {isOfficialSelected && (
                         <div className={`p-4 rounded-xl text-xs flex items-center justify-between shadow-xs border ${isSuperAdmin
                             ? 'bg-stone-100 border-stone-300 text-stone-900'
@@ -625,129 +738,249 @@ export default function AuthoringTool() {
                             </div>
                         </div>
 
-                        {/* PESTANYES DE LES FASES */}
+                        {/* PESTANYES DE LES FASES DINÀMIQUES */}
                         <div className="space-y-4">
-                            <div className="flex border-b border-stone-200 gap-2">
-                                {(['MISION_1', 'MISION_2', 'MISION_3', 'MISION_4'] as const).map((mKey, idx) => (
+                            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
+                                <div className="flex gap-2 overflow-x-auto">
+                                    {clausFases.map((mKey, idx) => (
+                                        <button
+                                            key={mKey}
+                                            type="button"
+                                            onClick={() => setTabMissio(mKey)}
+                                            className={`pb-1 px-3 text-xs font-mono font-bold border-b-2 cursor-pointer transition-all whitespace-nowrap ${tabMissio === mKey ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-600'
+                                                }`}
+                                        >
+                                            Fase {idx + 1}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {!isLocked && (
                                     <button
-                                        key={mKey}
                                         type="button"
-                                        onClick={() => setTabMissio(mKey)}
-                                        className={`pb-2 px-3 text-xs font-mono font-bold border-b-2 cursor-pointer transition-all ${tabMissio === mKey ? 'border-stone-900 text-stone-900' : 'border-transparent text-stone-400 hover:text-stone-600'
-                                            }`}
+                                        onClick={afegirFaseDinamica}
+                                        className="text-xs bg-stone-100 hover:bg-stone-200 text-stone-800 font-medium px-3 py-1 rounded-lg border border-stone-200/80 transition-colors cursor-pointer"
                                     >
-                                        Fase {idx + 1}
+                                        ＋ Afegir fase
                                     </button>
-                                ))}
+                                )}
                             </div>
 
-                            {/* MILLORA 3: Nota d'orientació sobre el desament conjunt de totes les fases */}
                             <p className="text-[11px] text-stone-500 italic">
-                                Les modificacions realitzades a qualsevol de les 4 fases es desaran conjuntament en prémer el botó final.
+                                Les modificacions realitzades a qualsevol de les {clausFases.length} fases es desaran conjuntament en prémer el botó final.
                             </p>
 
-                            <div className="bg-[#FAF8F5] p-5 rounded-2xl border border-stone-200/80 space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {missionsData[tabMissio] && (
+                                <div className="bg-[#FAF8F5] p-5 rounded-2xl border border-stone-200/80 space-y-4">
+                                    <div className="flex justify-between items-center bg-stone-100/80 p-2.5 rounded-xl border border-stone-200/60">
+                                        <span className="text-xs font-mono font-bold text-stone-700">Configurant: {tabMissio}</span>
+
+                                        <div className="flex items-center gap-2">
+                                            {!isLocked && (
+                                                <button
+                                                    type="button"
+                                                    onClick={executarTestSeguretat}
+                                                    disabled={testingSecurity}
+                                                    className="bg-stone-900 hover:bg-stone-800 text-stone-50 border border-stone-800 text-xs font-medium px-3 py-1 rounded-lg transition-all cursor-pointer shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                                                >
+                                                    {testingSecurity ? '🛡️ Provant seguretat...' : '🛡️ Test de Seguretat IA'}
+                                                </button>
+                                            )}
+
+                                            {clausFases.length > 1 && !isLocked && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => eliminarFaseDinamica(tabMissio)}
+                                                    className="text-red-600 hover:text-red-800 text-xs font-medium cursor-pointer ml-2"
+                                                >
+                                                    Eliminar aquesta fase
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-medium text-stone-700 mb-1">Nom de l'agent d'IA *</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                disabled={isLocked}
+                                                value={missionsData[tabMissio]?.bot_name || ''}
+                                                onChange={(e) => updateMissionField('bot_name', e.target.value)}
+                                                className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-stone-700 mb-1">Codi de validació de fase *</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                disabled={isLocked}
+                                                value={missionsData[tabMissio]?.codi_desblocatge || ''}
+                                                onChange={(e) => updateMissionField('codi_desblocatge', e.target.value)}
+                                                className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold uppercase disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div>
-                                        <label className="block text-xs font-medium text-stone-700 mb-1">Nom de l'agent d'IA *</label>
+                                        <label className="block text-xs font-medium text-stone-700 mb-1">Títol de la fase *</label>
                                         <input
                                             type="text"
                                             required
                                             disabled={isLocked}
-                                            value={missionsData[tabMissio]?.bot_name || ''}
-                                            onChange={(e) => updateMissionField('bot_name', e.target.value)}
-                                            className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                                            value={missionsData[tabMissio]?.titol || ''}
+                                            onChange={(e) => updateMissionField('titol', e.target.value)}
+                                            className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-xs font-medium text-stone-700 mb-1">Codi de validació de fase *</label>
+                                        <label className="block text-xs font-medium text-stone-700 mb-1">Documentació de suport (Dossier de treball)</label>
                                         <input
                                             type="text"
-                                            required
                                             disabled={isLocked}
-                                            value={missionsData[tabMissio]?.codi_desblocatge || ''}
-                                            onChange={(e) => updateMissionField('codi_desblocatge', e.target.value)}
-                                            className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold uppercase disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                                            value={missionsData[tabMissio]?.evidenced_doc || ''}
+                                            onChange={(e) => updateMissionField('evidenced_doc', e.target.value)}
+                                            className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
                                         />
                                     </div>
-                                </div>
 
-                                <div>
-                                    <label className="block text-xs font-medium text-stone-700 mb-1">Títol de la fase *</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        disabled={isLocked}
-                                        value={missionsData[tabMissio]?.titol || ''}
-                                        onChange={(e) => updateMissionField('titol', e.target.value)}
-                                        className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-stone-700 mb-1">Documentació de suport (Dossier de treball)</label>
-                                    <input
-                                        type="text"
-                                        disabled={isLocked}
-                                        value={missionsData[tabMissio]?.evidenced_doc || ''}
-                                        onChange={(e) => updateMissionField('evidenced_doc', e.target.value)}
-                                        className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-stone-700 mb-1">Objectiu d'avaluació *</label>
-                                    <textarea
-                                        rows={2}
-                                        required
-                                        disabled={isLocked}
-                                        value={missionsData[tabMissio]?.repte || ''}
-                                        onChange={(e) => updateMissionField('repte', e.target.value)}
-                                        className="w-full bg-white border border-stone-300 rounded-xl p-3 text-xs leading-relaxed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
-                                    />
-                                </div>
-
-                                {/* SYSTEM PROMPT PROTEGIT */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-1">
-                                        <label className="block text-xs font-medium text-stone-700">
-                                            Instruccions de la IA (System Prompt) *
-                                        </label>
-                                        {isLocked && (
-                                            <span className="text-[10px] font-mono text-stone-400">
-                                                Contingut no editable
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <div className="relative overflow-hidden rounded-xl">
+                                    <div>
+                                        <label className="block text-xs font-medium text-stone-700 mb-1">Objectiu d'avaluació *</label>
                                         <textarea
-                                            rows={8}
-                                            required={!isLocked}
+                                            rows={2}
+                                            required
                                             disabled={isLocked}
-                                            value={
-                                                isLocked
-                                                    ? "Instruccions de la plantilla oficial consolidades. Aquestes directrius estan reservades per al funcionament del sistema i no són editables des d'aquesta vista."
-                                                    : (missionsData[tabMissio]?.system_prompt || '')
-                                            }
-                                            onChange={(e) => updateMissionField('system_prompt', e.target.value)}
-                                            className={`w-full border rounded-xl p-3 text-xs font-mono leading-relaxed transition-all resize-y focus:outline-none focus:ring-2 focus:ring-stone-400 ${isLocked
-                                                ? 'bg-stone-100 text-stone-400 select-none blur-xs pointer-events-none'
-                                                : 'bg-white border-stone-300 text-stone-800'
-                                                }`}
+                                            value={missionsData[tabMissio]?.repte || ''}
+                                            onChange={(e) => updateMissionField('repte', e.target.value)}
+                                            className="w-full bg-white border border-stone-300 rounded-xl p-3 text-xs leading-relaxed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
                                         />
+                                    </div>
 
-                                        {isLocked && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-stone-900/10 backdrop-blur-[1px] pointer-events-none">
-                                                <div className="bg-stone-900/90 text-stone-50 font-mono text-xs px-4 py-2 rounded-xl shadow-md">
+                                    {/* SYSTEM PROMPT PROTEGIT */}
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <label className="block text-xs font-medium text-stone-700">
+                                                Instruccions de la IA (System Prompt) *
+                                            </label>
+                                            {isLocked && (
+                                                <span className="text-[10px] font-mono text-stone-400">
                                                     Contingut no editable
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="relative overflow-hidden rounded-xl">
+                                            <textarea
+                                                rows={6}
+                                                required={!isLocked}
+                                                disabled={isLocked}
+                                                value={
+                                                    isLocked
+                                                        ? "Instruccions de la plantilla oficial consolidades. Aquestes directrius estan reservades per al funcionament del sistema i no són editables des d'aquesta vista."
+                                                        : (missionsData[tabMissio]?.system_prompt || '')
+                                                }
+                                                onChange={(e) => updateMissionField('system_prompt', e.target.value)}
+                                                className={`w-full border rounded-xl p-3 text-xs font-mono leading-relaxed transition-all resize-y focus:outline-none focus:ring-2 focus:ring-stone-400 ${isLocked
+                                                    ? 'bg-stone-100 text-stone-400 select-none blur-xs pointer-events-none'
+                                                    : 'bg-white border-stone-300 text-stone-800'
+                                                    }`}
+                                            />
+
+                                            {isLocked && (
+                                                <div className="absolute inset-0 flex items-center justify-center bg-stone-900/10 backdrop-blur-[1px] pointer-events-none">
+                                                    <div className="bg-stone-900/90 text-stone-50 font-mono text-xs px-4 py-2 rounded-xl shadow-md">
+                                                        Contingut no editable
+                                                    </div>
                                                 </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* SECCIÓ DE CONFIGURACIÓ MULTI-BOT PER FASE */}
+                                    <div className="border-t border-stone-200/80 pt-4 space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <span className="text-[10px] font-mono font-bold text-stone-800 uppercase tracking-wider block">
+                                                    INTERLOCUTORS SECUNDARIS (MULTI-BOT)
+                                                </span>
+                                                <p className="text-[11px] text-stone-500">Actors addicionals amb qui l'equip pot interactuar en aquesta fase.</p>
+                                            </div>
+
+                                            {!isLocked && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => afegirBotAInterlocutors(tabMissio)}
+                                                    className="bg-stone-100 hover:bg-stone-200 text-stone-700 border border-stone-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                                >
+                                                    ＋ Afegir Interlocutor
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {Array.isArray(missionsData[tabMissio]?.bots) && missionsData[tabMissio].bots!.length > 0 && (
+                                            <div className="space-y-3 pl-3 border-l-2 border-stone-300 pt-1">
+                                                {missionsData[tabMissio].bots!.map((bot) => (
+                                                    <div key={bot.id_bot} className="p-3.5 bg-white border border-stone-200 rounded-xl space-y-3 shadow-2xs">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="text-xs font-mono font-bold text-stone-700">ID: {bot.id_bot}</span>
+                                                            {!isLocked && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => eliminarBotDInterlocutors(tabMissio, bot.id_bot)}
+                                                                    className="text-red-600 hover:text-red-800 text-xs font-medium cursor-pointer"
+                                                                >
+                                                                    Eliminar
+                                                                </button>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="block text-[10px] font-medium text-stone-600 mb-1">Nom de l'Actor</label>
+                                                                <input
+                                                                    type="text"
+                                                                    disabled={isLocked}
+                                                                    value={bot.bot_name}
+                                                                    onChange={(e) => updateBotField(tabMissio, bot.id_bot, 'bot_name', e.target.value)}
+                                                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-lg p-2 text-xs text-stone-900"
+                                                                />
+                                                            </div>
+
+                                                            <div>
+                                                                <label className="block text-[10px] font-medium text-stone-600 mb-1">Títol / Càrrec</label>
+                                                                <input
+                                                                    type="text"
+                                                                    disabled={isLocked}
+                                                                    value={bot.role_title || ''}
+                                                                    onChange={(e) => updateBotField(tabMissio, bot.id_bot, 'role_title', e.target.value)}
+                                                                    placeholder="Ex: Director Financer"
+                                                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-lg p-2 text-xs text-stone-900"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div>
+                                                            <label className="block text-[10px] font-medium text-stone-600 mb-1">System Prompt de l'Interlocutor</label>
+                                                            <textarea
+                                                                rows={2}
+                                                                disabled={isLocked}
+                                                                value={bot.system_prompt}
+                                                                onChange={(e) => updateBotField(tabMissio, bot.id_bot, 'system_prompt', e.target.value)}
+                                                                className="w-full bg-[#FAF8F5] border border-stone-300 rounded-lg p-2 text-xs font-mono text-stone-800"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </div>
+
                                 </div>
-                            </div>
+                            )}
                         </div>
 
                         {!isLocked ? (
@@ -781,6 +1014,88 @@ export default function AuthoringTool() {
                 </div>
 
             </div>
+
+            {/* MODAL DE RESULTATS DEL TEST DE SEGURETAT (RED TEAMING) */}
+            {showRedTeamModal && redTeamResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
+                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-2xl w-full shadow-2xl space-y-5 max-h-[85vh] overflow-y-auto font-sans">
+
+                        <div className="flex justify-between items-start border-b border-stone-100 pb-4">
+                            <div>
+                                <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase">
+                                    INFORME DE RED TEAMING // FASE {tabMissio}
+                                </span>
+                                <h2 className="text-lg font-serif font-medium text-stone-900 mt-0.5">
+                                    Diagnòstic de Seguretat del Bot
+                                </h2>
+                            </div>
+
+                            <div className={`px-4 py-2 rounded-xl text-center border font-mono font-bold text-sm ${redTeamResult.score >= 80
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-red-50 text-red-800 border-red-200'
+                                }`}>
+                                Puntuació: {redTeamResult.score}/100
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <h3 className="text-xs font-mono font-bold text-stone-700 uppercase tracking-wider">
+                                RESULTATS DELS VECTORS D'ATAC SIMULATS ({redTeamResult.testResults.length})
+                            </h3>
+
+                            <div className="space-y-3">
+                                {redTeamResult.testResults.map((test: any, idx: number) => (
+                                    <div key={idx} className={`p-4 rounded-xl border space-y-2 text-xs ${test.superat ? 'bg-stone-50 border-stone-200/80' : 'bg-red-50/60 border-red-200'
+                                        }`}>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-semibold text-stone-900">{test.nomVector}</span>
+                                            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase ${test.superat ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                                                }`}>
+                                                {test.superat ? '✓ RESISTIT' : '⚠️ VULNERABLE'}
+                                            </span>
+                                        </div>
+
+                                        <div className="text-stone-600 font-mono text-[11px] bg-white p-2.5 rounded-lg border border-stone-200/60">
+                                            <strong>Atac simulat:</strong> "{test.promptAtac}"
+                                        </div>
+
+                                        <div className="text-stone-700 leading-relaxed italic bg-white p-2.5 rounded-lg border border-stone-200/60">
+                                            <strong>Resposta del Bot:</strong> "{test.respostaBot}"
+                                        </div>
+
+                                        <p className="text-[11px] text-stone-500 font-sans">
+                                            <strong>Anàlisi del Jutge:</strong> {test.motiu}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {redTeamResult.recomanacions.length > 0 && (
+                                <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-xl space-y-1 text-xs text-amber-900">
+                                    <span className="font-semibold block font-mono text-[10px] uppercase text-amber-800 mb-1">
+                                        💡 Recomanacions de blindatge
+                                    </span>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        {redTeamResult.recomanacions.map((rec: string, i: number) => (
+                                            <li key={i}>{rec}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end pt-3 border-t border-stone-100">
+                            <button
+                                onClick={() => setShowRedTeamModal(false)}
+                                className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-5 py-2.5 rounded-xl cursor-pointer transition-colors shadow-xs"
+                            >
+                                Entesos / Tancar
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
