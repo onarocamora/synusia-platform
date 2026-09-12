@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         {
           id_sessio: sessio.id_sessio,
           nom_equip: nomNet,
-          missio_actual: 'MISION_1'
+          missio_actual: '0'
         }
       ])
       .select('id_equip, id_sessio, nom_equip, missio_actual')

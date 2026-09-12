@@ -17,16 +17,18 @@ interface Message {
 
 interface MissionConfig {
     titol: string;
-    codi_correcte: string;
-    codi_desblocatge: string;
+    codi_correcte?: string;
+    codi_desblocatge?: string;
     evidenced_doc?: string;
+    dossier?: string;
     seguent_missio: string;
     consell: string;
     repte: string;
-    objectius: string[];
+    objectius?: string[];
     welcome_message: string;
     bot_name: string;
     bot_id?: string;
+    system_prompt?: string;
 }
 
 interface DefaultStoryline {
@@ -35,6 +37,86 @@ interface DefaultStoryline {
             [key: string]: MissionConfig;
         };
     };
+}
+
+// ---------------------------------------------------------------------------
+// COMPONENT MODAL DE CONFIANÇA (MOMENTS A I B)
+// ---------------------------------------------------------------------------
+interface ConfidenceModalProps {
+    isOpen: boolean;
+    type: 'MOMENT_A' | 'MOMENT_B';
+    botName: string;
+    onConfirm: (rating: number) => void;
+}
+
+function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalProps) {
+    const [selectedRating, setSelectedRating] = useState<number | null>(null);
+
+    if (!isOpen) return null;
+
+    const isMomentA = type === 'MOMENT_A';
+
+    const title = isMomentA
+        ? `🎲 Aposta de Confiança Inicial (Moment A)`
+        : `🛡️ Seguretat de Validació Final (Moment B)`;
+
+    const description = isMomentA
+        ? `L'assistent ${botName} us acaba de donar aquesta resposta. Sense mirar la documentació oficial en paper: quant us en refieu d'aquesta informació ara mateix?`
+        : `Heu detectat i corregit tots els errors? Quina seguretat teniu abans de signar l'auditoria?`;
+
+    const labels = isMomentA
+        ? ['1 - Cap confiança. Ho vull comprovar tot.', '2 - Em fa dubtar bastant.', '3 - Crec que està bé (Però ho revisaria).', '4 - Em refio bastant.', '5 - M\'ho crec al 100%. Ho enviaria tal qual.']
+        : ['1 - Gens segurs. Hem anat a cegues.', '2 - Ens falta alguna cosa.', '3 - Bastant bé.', '4 - Molt segurs.', '5 - 100% segurs. Tot net.'];
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="w-full max-w-md bg-white border border-stone-200/90 rounded-2xl p-6 shadow-2xl text-stone-800 space-y-5">
+                <div>
+                    <span className="text-[10px] font-mono tracking-widest text-amber-600 uppercase font-bold block mb-1">
+                        {isMomentA ? 'AUDITORIA EN TEMPS REAL · EVAL PREVIA' : 'AUDITORIA EN TEMPS REAL · VERIFICACIÓ'}
+                    </span>
+                    <h3 className="text-lg font-serif font-medium text-stone-900">{title}</h3>
+                    <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">{description}</p>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2">
+                    {[1, 2, 3, 4, 5].map((val) => (
+                        <button
+                            key={val}
+                            type="button"
+                            onClick={() => setSelectedRating(val)}
+                            className={`flex flex-col items-center justify-center py-3 rounded-xl border font-bold text-sm transition-all cursor-pointer ${selectedRating === val
+                                ? 'bg-amber-500 border-amber-600 text-stone-950 scale-105 shadow-md'
+                                : 'bg-[#FAF8F5] border-stone-200 text-stone-700 hover:bg-stone-100'
+                                }`}
+                        >
+                            <span>{val}</span>
+                        </button>
+                    ))}
+                </div>
+
+                {selectedRating !== null && (
+                    <p className="text-center text-xs font-medium text-amber-800 bg-amber-50 py-2 rounded-lg border border-amber-200/60">
+                        {labels[selectedRating - 1]}
+                    </p>
+                )}
+
+                <button
+                    type="button"
+                    disabled={selectedRating === null}
+                    onClick={() => {
+                        if (selectedRating !== null) {
+                            onConfirm(selectedRating);
+                            setSelectedRating(null);
+                        }
+                    }}
+                    className="w-full py-3 rounded-xl bg-stone-900 text-stone-50 font-medium text-xs hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+                >
+                    Confirmar i Continuar →
+                </button>
+            </div>
+        </div>
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +204,13 @@ function SimulacioContent() {
     const [idEquip, setIdEquip] = useState<string>('');
     const [idSessioGlobal, setIdSessioGlobal] = useState<string>('');
     const [idClient, setIdClient] = useState<string>('');
+
+    // Estats de Telemetria FARO V3 (Moments A i B)
+    const [momentAConfidence, setMomentAConfidence] = useState<number | null>(null);
+    const [momentBCertainty, setMomentBCertainty] = useState<number | null>(null);
+    const [showModalA, setShowModalA] = useState<boolean>(false);
+    const [showModalB, setShowModalB] = useState<boolean>(false);
+    const [pendingNextMission, setPendingNextMission] = useState<string | null>(null);
 
     // Estats de la Validació Manual (Override)
     const [codiUnlock, setCodiUnlock] = useState<string>('');
@@ -254,9 +343,10 @@ function SimulacioContent() {
     }, [idEquip, enviat]);
 
     // 🎯 CARREGAR MISSIÓ
+    // 🎯 CARREGAR MISSIÓ
     const carregarMissio = async (idMissio: string, templateIdParam?: string, esForcatPerAdmin: boolean = false) => {
         try {
-            const targetTemplate = templateIdParam || idTemplateSessio || 'CAS_OMNIA_2026';
+            const targetTemplate = templateIdParam || idTemplateSessio || 'CAS-FARO-V3-OFFICIAL';
 
             const { data } = await supabase
                 .from('pedagogical_templates')
@@ -264,16 +354,31 @@ function SimulacioContent() {
                 .eq('id_template', targetTemplate)
                 .single();
 
-            const configCustom = data?.scenario_context?.missions?.[idMissio];
+            // Normalitzar la clau (extreu '1' tant de '1' com de 'MISION_1')
+            const rawStr = String(idMissio);
+            const numMatch = rawStr.match(/\d+/);
+            const missioKey = numMatch ? numMatch[0] : rawStr;
+
+            // Cerca flexible al JSON de Supabase
+            const missionsDict = data?.scenario_context?.missions || {};
+            const configCustom =
+                missionsDict[idMissio] ||
+                missionsDict[missioKey] ||
+                missionsDict[`MISION_${missioKey}`];
+
             const configFallback = defaultStoryline.config_missions.missions[idMissio as keyof typeof defaultStoryline.config_missions.missions];
             const config = configCustom || configFallback;
 
             if (config) {
                 setMissioConfig(config);
-                setMissioActual(idMissio);
-                missioActualRef.current = idMissio;
+                setMissioActual(missioKey);
+                missioActualRef.current = missioKey;
                 setCodiUnlock('');
                 setErrorUnlock('');
+
+                // Reiniciem valors de la nova fase
+                setMomentAConfidence(null);
+                setMomentBCertainty(null);
 
                 if (esForcatPerAdmin) {
                     setNotificacioCanviFase(`⚡ El facilitador ha avançat la simulació a: ${config.titol}`);
@@ -285,7 +390,7 @@ function SimulacioContent() {
                     content: esForcatPerAdmin
                         ? `📢 [AVÍS DEL SISTEMA]: El facilitador ha avançat la simulació a la següent fase.\n\n${config.welcome_message || ''}`
                         : (config.welcome_message || 'SISTEMA REINICIAT.'),
-                    bot_name: config.bot_name || 'OmnIA'
+                    bot_name: config.bot_name || 'ORÁCULO'
                 };
 
                 setMessages([missatgeInicial]);
@@ -328,11 +433,11 @@ function SimulacioContent() {
                 const templateCas = data.sessio?.id_template || 'CAS_OMNIA_2026';
                 setIdTemplateSessio(templateCas);
 
-                await carregarMissio('MISION_1', templateCas);
+                await carregarMissio('0', templateCas); // Inicia a la Missió 0: Escalfament d'Atlas Servicios Integrales
 
                 posthog.capture('session_joined', {
                     template_id: templateCas,
-                    mission_start: 'MISION_1',
+                    mission_start: '0',
                 });
 
                 setFaseEnquesta('PRE_TEST');
@@ -345,7 +450,22 @@ function SimulacioContent() {
         }
     };
 
-    // Validar Codi de Desbloqueig
+    // Transició de Fase confirmada (post Moment B)
+    const executarTransicioFase = (seguent: string) => {
+        supabase
+            .from('equips')
+            .update({ missio_actual: seguent })
+            .eq('id_equip', idEquip)
+            .then(() => {
+                if (seguent === 'FINAL') {
+                    setFaseFinal(true);
+                } else {
+                    carregarMissio(seguent);
+                }
+            });
+    };
+
+    // Validar Codi de Desbloqueig Manual
     const handleUnlock = (e: React.FormEvent) => {
         e.preventDefault();
         if (!codiUnlock.trim()) return;
@@ -364,23 +484,14 @@ function SimulacioContent() {
             }]);
 
             const seguent = missioConfig?.seguent_missio || 'FINAL';
-
-            supabase
-                .from('equips')
-                .update({ missio_actual: seguent })
-                .eq('id_equip', idEquip)
-                .then(() => {
-                    if (seguent === 'FINAL') {
-                        setFaseFinal(true);
-                    } else {
-                        carregarMissio(seguent);
-                    }
-                });
+            setPendingNextMission(seguent);
+            setShowModalB(true); // Obrir Modal B de seguretat abans de saltar
         } else {
             setErrorUnlock('❌ Codi no vàlid. Comproveu les evidències.');
         }
     };
-    // 2. Funció per processar l'enviament del report
+
+    // Funció per processar l'enviament del report
     const handleReportIssue = async () => {
         if (!missatgeAReportar || !idEquip) return;
         setEnviantReport(true);
@@ -398,7 +509,6 @@ function SimulacioContent() {
                 })
             });
 
-            // Opcional: Feedback visual per a l'usuari (ex: un petit toast, però tancar el modal és suficient)
             setMissatgeAReportar(null);
             setDetallReport('');
             posthog.capture('ai_issue_reported', { motiu: motiuReport });
@@ -408,7 +518,9 @@ function SimulacioContent() {
             setEnviantReport(false);
         }
     };
-    // Enviar Missatge al Xat
+
+    // Enviar Missatge al Xat amb Telemetria de Confiança
+    // Enviar Missatge al Xat amb Telemetria de Confiança
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputMessage.trim() || isTyping) return;
@@ -422,6 +534,7 @@ function SimulacioContent() {
         posthog.capture('chat_message_sent', {
             mission_id: missioActual,
             message_length: userMessageText.length,
+            moment_a_confidence: momentAConfidence,
         });
 
         try {
@@ -429,17 +542,21 @@ function SimulacioContent() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    id_sessio: idSessioGlobal,
                     id_equip: idEquip,
                     missio_actual: missioActual,
                     bot_id: missioConfig?.bot_id || 'DEFAULT',
                     idTemplate: idTemplateSessio,
                     missionId: missioActual,
                     messages: nousMissatges.map(m => ({ role: m.role, content: m.content })),
-                    historial_missatges: nousMissatges.map(m => ({ role: m.role, content: m.content }))
+                    historial_missatges: nousMissatges.map(m => ({ role: m.role, content: m.content })),
+                    // Enviament dels paràmetres de telemetria FARO V3
+                    moment_a_confidence: momentAConfidence,
+                    moment_b_certainty: momentBCertainty,
                 })
             });
 
-            let data: { content?: string; bot_name?: string; credits_restants?: number } = {};
+            let data: { content?: string; bot_name?: string; credits_restants?: number; unlockedKey?: boolean } = {};
             try {
                 data = await resposta.json();
             } catch (jsonErr) {
@@ -450,9 +567,28 @@ function SimulacioContent() {
                 setMessages(prev => [...prev, {
                     role: 'assistant',
                     content: data.content || 'Sense resposta del sistema.',
-                    bot_name: data.bot_name || missioConfig?.bot_name || 'OmnIA'
+                    bot_name: data.bot_name || missioConfig?.bot_name || 'ORÁCULO'
                 }]);
                 if (data.credits_restants !== undefined) setCredits(data.credits_restants);
+
+                // 🎯 MOMENT A: Salta amb un retard perquè l'alumne tingui temps de llegir
+                if (momentAConfidence === null && !data.unlockedKey) {
+                    // Càlcul dinàmic: 30ms per caràcter (Mínim 3.5 segons, Màxim 8 segons)
+                    const tempsLecturaMs = Math.min(Math.max((data.content?.length || 0) * 30, 3500), 8000);
+                    setTimeout(() => {
+                        setShowModalA(true);
+                    }, tempsLecturaMs);
+                }
+
+                // 🛡️ MOMENT B: Si la IA lliura la clau 🔑, obrim el Modal B abans d'avançar
+                if (data.unlockedKey) {
+                    // Aquí també hi posem un petit retard d'1.5 segons perquè vegin la clau abans que salti el modal
+                    setTimeout(() => {
+                        const seguent = missioConfig?.seguent_missio || 'FINAL';
+                        setPendingNextMission(seguent);
+                        setShowModalB(true);
+                    }, 1500);
+                }
             } else {
                 setMessages(prev => [...prev, { role: 'assistant', content: data.content || '❌ Error de connexió.', bot_name: 'SYSTEM_ERR' }]);
             }
@@ -848,10 +984,19 @@ function SimulacioContent() {
                 <div className="space-y-6 pb-24">
                     {messages.map((msg, index) => (
                         <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                            <div className="flex items-center gap-2 mb-1 px-1">
+                            <div className="flex items-center justify-between w-full max-w-[85%] sm:max-w-[78%] mb-1 px-1">
                                 <span className="text-[11px] font-medium text-stone-400 uppercase">
                                     {msg.role === 'user' ? nomsEquip : (msg.bot_name || missioConfig?.bot_name || 'OmnIA')}
                                 </span>
+                                {msg.role === 'assistant' && (
+                                    <button
+                                        onClick={() => setMissatgeAReportar(msg)}
+                                        className="text-[10px] text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
+                                        title="Reportar fallida d'IA"
+                                    >
+                                        🚩 Reportar
+                                    </button>
+                                )}
                             </div>
                             <div className={`max-w-[85%] sm:max-w-[78%] px-4 py-3 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-stone-900 text-stone-50 rounded-br-xs' : 'bg-white text-stone-800 border border-stone-200/80 shadow-xs rounded-bl-xs'}`}>
                                 {msg.content}
@@ -889,12 +1034,13 @@ function SimulacioContent() {
                             Enviar
                         </button>
                     </form>
-                    <p className="text-[10px] text-stone-400 text-center leading-tight selection:bg-stone-200">
+                    <p className="text-[10px] text-stone-400 text-center leading-tight selection:bg-stone-200 mt-2">
                         La IA pot cometre errors. Contingut i actors simulats artificialment amb caràcter pedagògic no vinculant.
                     </p>
                 </div>
             </main>
 
+            {/* DRAWER DEL DOSSIER */}
             {dossierObert && (
                 <div className="fixed inset-0 z-30 flex justify-end bg-stone-900/20 backdrop-blur-xs transition-opacity">
                     <aside className="w-full max-w-md bg-white border-l border-stone-200 h-full p-6 flex flex-col justify-between overflow-y-auto shadow-2xl">
@@ -916,10 +1062,10 @@ function SimulacioContent() {
                                         {missioConfig.repte}
                                     </div>
                                 )}
-                                {missioConfig?.evidenced_doc && (
+                                {(missioConfig?.evidenced_doc || missioConfig?.dossier) && (
                                     <div className="bg-amber-50/80 border border-amber-200 p-3 rounded-xl text-xs text-amber-900 leading-relaxed">
                                         <span className="font-semibold block mb-1 uppercase font-mono text-[10px] text-amber-800">📄 Evidència de Suport:</span>
-                                        {missioConfig?.evidenced_doc}
+                                        {missioConfig?.evidenced_doc || missioConfig?.dossier}
                                     </div>
                                 )}
                                 {Array.isArray(missioConfig?.objectius) && missioConfig.objectius.length > 0 && (
@@ -981,7 +1127,7 @@ function SimulacioContent() {
                 </div>
             )}
 
-            // 4. AFEGIR EL MODAL DE REPORT (pots posar-lo just abans de tancar el div arrel del component terminal)
+            {/* MODAL DE REPORT D'INCIDÈNCIA (AI ACT AUDIT) */}
             {missatgeAReportar && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
                     <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
@@ -1036,6 +1182,35 @@ function SimulacioContent() {
                     </div>
                 </div>
             )}
+
+            {/* MODALS DE CONFIANÇA (MOMENT A - APOSTA INICIAL) */}
+            <ConfidenceModal
+                isOpen={showModalA}
+                type="MOMENT_A"
+                botName={missioConfig?.bot_name || 'OmnIA'}
+                onConfirm={(rating) => {
+                    setMomentAConfidence(rating);
+                    setShowModalA(false);
+                    posthog.capture('moment_a_confidence_set', { mission_id: missioActual, rating });
+                }}
+            />
+
+            {/* MODALS DE CONFIANÇA (MOMENT B - VERIFICACIÓ FINAL ABAST DE FASE) */}
+            <ConfidenceModal
+                isOpen={showModalB}
+                type="MOMENT_B"
+                botName={missioConfig?.bot_name || 'OmnIA'}
+                onConfirm={(rating) => {
+                    setMomentBCertainty(rating);
+                    setShowModalB(false);
+                    posthog.capture('moment_b_certainty_set', { mission_id: missioActual, rating });
+
+                    if (pendingNextMission) {
+                        executarTransicioFase(pendingNextMission);
+                        setPendingNextMission(null);
+                    }
+                }}
+            />
         </div>
     );
 }

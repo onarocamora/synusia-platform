@@ -19,7 +19,8 @@
     "openai": "^6.46.0",
     "posthog-js": "^1.426.3",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.0",

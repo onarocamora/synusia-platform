@@ -6,9 +6,6 @@ import posthog from 'posthog-js'
 import Link from 'next/link'
 import Image from 'next/image'
 
-// ---------------------------------------------------------------------------
-// PERMISOS D'ADMINISTRACIÓ
-// ---------------------------------------------------------------------------
 const SYNUSIA_ADMIN_EMAILS = [
     'ona.rocamora@synusia.io',
     'hello@synusia.io',
@@ -16,9 +13,6 @@ const SYNUSIA_ADMIN_EMAILS = [
     'ona.rocamora@nucliorigami.com'
 ]
 
-// ---------------------------------------------------------------------------
-// INTERFACES (AMB SUPORT MULTI-BOT I FASES DINÀMIQUES)
-// ---------------------------------------------------------------------------
 interface BotConfig {
     id_bot: string
     bot_name: string
@@ -53,30 +47,17 @@ interface PedagogicalTemplate {
 }
 
 const defaultMissionsInitial: Record<string, MissionConfig> = {
-    MISION_1: {
+    "1": {
         titol: 'Fase 1: Privacitat i Protecció de Dades',
         bot_name: 'Auditoria de Seguretat',
         bot_id: 'SEC_BOT',
         repte: 'Formular una sol·licitud d’accés indicant el rol i el nivell de permissos sense incloure dades personals (PII).',
         consell: 'Examineu la documentació de l’Evidència #1 i verifiqueu que no s’hi incloguin dades personals directes.',
         evidenced_doc: 'Evidència #1: Document de registre d’accessos.',
-        codi_desblocatge: 'ESTRUCTURA',
+        codi_desblocatge: '🔑 ESTRUCTURA_VALIDADA',
         welcome_message: 'Mòdul de seguretat actiu. Indiqueu els criteris de cerca per a la revisió.',
         system_prompt: `Ets el mòdul d'auditoria de seguretat de la plataforma. Exigeix formatació anònima i rigorosa.`,
-        seguent_missio: 'MISION_2',
-        bots: []
-    },
-    MISION_2: {
-        titol: 'Fase 2: Auditoria de Mètriques i Rendiment',
-        bot_name: 'Anàlisi de Dades',
-        bot_id: 'DATA_BOT',
-        repte: 'Sol·licitar l’organització de les dades en format taula i auditar la mitjana real de latència.',
-        consell: 'Verifiqueu la fórmula de càlcul amb les dades de la taula de latència.',
-        evidenced_doc: 'Evidència #2: Matriu de latència i fórmula de càlcul.',
-        codi_desblocatge: 'EVIDENCIA',
-        welcome_message: 'Mòdul d’anàlisi de dades connectat. Dades en brut disponibles per a consulta.',
-        system_prompt: `Ets el mòdul d'anàlisi de dades de la plataforma. Exigeix comprovació de taules.`,
-        seguent_missio: 'FINAL',
+        seguent_missio: '2',
         bots: []
     }
 }
@@ -89,8 +70,7 @@ export default function AuthoringTool() {
     const [missatge, setMissatge] = useState('')
     const [isSuperAdmin, setIsSuperAdmin] = useState(false)
 
-    // Gestió dinàmica de fase activa
-    const [tabMissio, setTabMissio] = useState<string>('MISION_1')
+    const [tabMissio, setTabMissio] = useState<string>('1')
 
     const [esEdicio, setEsEdicio] = useState(false)
     const [isOfficialSelected, setIsOfficialSelected] = useState(false)
@@ -99,18 +79,80 @@ export default function AuthoringTool() {
     const [welcomeMessage, setWelcomeMessage] = useState('Benvinguts a la simulació d\'auditoria Synusia.')
     const [missionsData, setMissionsData] = useState<Record<string, MissionConfig>>(defaultMissionsInitial)
 
-    // Generació automàtica per IA
     const [showAIModal, setShowAIModal] = useState(false)
     const [aiPromptInput, setAiPromptInput] = useState('')
     const [aiSectorInput, setAiSectorInput] = useState('Corporatiu')
     const [generatingAI, setGeneratingAI] = useState(false)
 
-    // ESTATS PER AL RED TEAMING (TEST DE SEGURETAT IA)
     const [testingSecurity, setTestingSecurity] = useState<boolean>(false)
     const [redTeamResult, setRedTeamResult] = useState<any>(null)
     const [showRedTeamModal, setShowRedTeamModal] = useState<boolean>(false)
 
+    const [aiIncludeMissionZero, setAiIncludeMissionZero] = useState<boolean>(true)
+
     const isLocked = isOfficialSelected && !isSuperAdmin
+
+    // ESTATS PER A L'INSPECTOR / DESCARREGADOR / IMPORTADOR DE JSON
+    const [showJSONModal, setShowJSONModal] = useState(false)
+    const [jsonInputModal, setJsonInputModal] = useState('')
+    const [copiat, setCopiat] = useState(false)
+
+    const extreureJSONActual = () => {
+        return JSON.stringify({
+            id_template: idTemplate,
+            titol: titol,
+            is_official: isOfficialSelected && isSuperAdmin,
+            scenario_context: {
+                welcome_message: welcomeMessage,
+                missions: missionsData
+            }
+        }, null, 2)
+    }
+
+    const descarregarJSON = () => {
+        const jsonStr = extreureJSONActual()
+        const blob = new Blob([jsonStr], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${idTemplate || 'CAS_SYNUSIA'}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+    }
+
+    const [aiIdiomaInput, setAiIdiomaInput] = useState<'ca' | 'es' | 'en'>('ca')
+
+    const copiarAlPortaretalls = () => {
+        navigator.clipboard.writeText(extreureJSONActual())
+        setCopiat(true)
+        setTimeout(() => setCopiat(false), 2000)
+    }
+
+    const carregarJSONManual = () => {
+        try {
+            const parsed = JSON.parse(jsonInputModal)
+            if (!parsed.scenario_context || !parsed.scenario_context.missions) {
+                alert("El JSON no té l'estructura vàlida de Synusia ('scenario_context.missions').")
+                return
+            }
+
+            setIdTemplate(parsed.id_template || generarCodiCurt())
+            setTitol(parsed.titol || 'Cas Importat')
+            setWelcomeMessage(parsed.scenario_context.welcome_message || '')
+            setMissionsData(parsed.scenario_context.missions)
+
+            const claus = Object.keys(parsed.scenario_context.missions)
+            if (claus.length > 0) setTabMissio(claus[0])
+
+            setShowJSONModal(false)
+            setJsonInputModal('')
+            setMissatge(`✅ Cas [${parsed.id_template}] carregat directament des de JSON brut.`)
+        } catch (err) {
+            alert(`Error en processar el JSON: ${err}`)
+        }
+    }
 
     const generarCodiCurt = () => {
         const randomHex = Math.random().toString(36).substring(2, 6).toUpperCase()
@@ -149,7 +191,7 @@ export default function AuthoringTool() {
         setTitol('')
         setWelcomeMessage('Benvinguts a la simulació d\'auditoria Synusia.')
         setMissionsData(defaultMissionsInitial)
-        setTabMissio('MISION_1')
+        setTabMissio('1')
         setMissatge('Esborrany creat. Configureu les fases i premeu "Desar cas al catàleg" per publicar-ho.')
     }
 
@@ -164,7 +206,7 @@ export default function AuthoringTool() {
         setMissionsData(missions)
 
         const primeresClaus = Object.keys(missions)
-        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : 'MISION_1')
+        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : '1')
 
         if (tmpl.is_official) {
             setMissatge(isSuperAdmin ? `Plantilla oficial [${tmpl.id_template}] en mode edició admin.` : `Plantilla oficial [${tmpl.id_template}] en mode lectura.`)
@@ -187,17 +229,14 @@ export default function AuthoringTool() {
         setMissionsData(missions)
 
         const primeresClaus = Object.keys(missions)
-        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : 'MISION_1')
+        setTabMissio(primeresClaus.length > 0 ? primeresClaus[0] : '1')
         setMissatge(`Còpia generada a l'editor des de [${tmpl.id_template}]. Recordeu desar el cas al final.`)
     }
 
-    // ---------------------------------------------------------------------------
-    // GESTIÓ DINÀMICA DE FASES ($N$ FASES)
-    // ---------------------------------------------------------------------------
     const afegirFaseDinamica = () => {
         const clausActuals = Object.keys(missionsData)
         const numNovaFase = clausActuals.length + 1
-        const novaClau = `MISION_${numNovaFase}`
+        const novaClau = `${numNovaFase}`
 
         const novesMissions = { ...missionsData }
 
@@ -215,7 +254,7 @@ export default function AuthoringTool() {
             repte: `Repte específic de la Fase ${numNovaFase}.`,
             consell: 'Consell de seguretat o referència al dossier.',
             evidenced_doc: `Evidència #${numNovaFase}`,
-            codi_desblocatge: `CLAU_FASE_${numNovaFase}`,
+            codi_desblocatge: `🔑 CLAU_FASE_${numNovaFase}`,
             welcome_message: `Mòdul de la Fase ${numNovaFase} connectat.`,
             system_prompt: `Ets l'agent d'avaluació de la Fase ${numNovaFase}. Exigeix rigor pedagògic.`,
             seguent_missio: 'FINAL',
@@ -241,51 +280,36 @@ export default function AuthoringTool() {
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // GESTIÓ MULTI-BOT PER FASE
-    // ---------------------------------------------------------------------------
     const afegirBotAInterlocutors = (faseKey: string) => {
-        const mission = missionsData[faseKey]
-        if (!mission) return
-
-        const currentBots = mission.bots || []
-        const newBotId = `BOT_${currentBots.length + 1}`
-        const updatedBots: BotConfig[] = [
-            ...currentBots,
-            {
-                id_bot: newBotId,
-                bot_name: `Interlocutor ${currentBots.length + 1}`,
-                role_title: 'Assessor Especialista',
-                system_prompt: 'Ets un especialista del cas. Respon només a consultes del teu àmbit.'
-            }
-        ]
-
-        setMissionsData(prev => ({
-            ...prev,
-            [faseKey]: { ...prev[faseKey], bots: updatedBots }
-        }))
+        setMissionsData(prev => {
+            const mission = prev[faseKey]
+            if (!mission) return prev
+            const currentBots = mission.bots || []
+            const newBotId = `BOT_${currentBots.length + 1}`
+            const updatedBots: BotConfig[] = [
+                ...currentBots,
+                { id_bot: newBotId, bot_name: `Interlocutor ${currentBots.length + 1}`, role_title: 'Assessor Especialista', system_prompt: '' }
+            ]
+            return { ...prev, [faseKey]: { ...mission, bots: updatedBots } }
+        })
     }
 
     const eliminarBotDInterlocutors = (faseKey: string, botId: string) => {
-        const mission = missionsData[faseKey]
-        if (!mission || !mission.bots) return
-
-        const updatedBots = mission.bots.filter(b => b.id_bot !== botId)
-        setMissionsData(prev => ({
-            ...prev,
-            [faseKey]: { ...prev[faseKey], bots: updatedBots }
-        }))
+        setMissionsData(prev => {
+            const mission = prev[faseKey]
+            if (!mission || !mission.bots) return prev
+            const updatedBots = mission.bots.filter(b => b.id_bot !== botId)
+            return { ...prev, [faseKey]: { ...mission, bots: updatedBots } }
+        })
     }
 
     const updateBotField = (faseKey: string, botId: string, field: keyof BotConfig, value: string) => {
-        const mission = missionsData[faseKey]
-        if (!mission || !mission.bots) return
-
-        const updatedBots = mission.bots.map(b => b.id_bot === botId ? { ...b, [field]: value } : b)
-        setMissionsData(prev => ({
-            ...prev,
-            [faseKey]: { ...prev[faseKey], bots: updatedBots }
-        }))
+        setMissionsData(prev => {
+            const mission = prev[faseKey]
+            if (!mission || !mission.bots) return prev
+            const updatedBots = mission.bots.map(b => b.id_bot === botId ? { ...b, [field]: value } : b)
+            return { ...prev, [faseKey]: { ...mission, bots: updatedBots } }
+        })
     }
 
     const updateMissionField = (field: keyof MissionConfig, value: any) => {
@@ -298,9 +322,6 @@ export default function AuthoringTool() {
         }))
     }
 
-    // ---------------------------------------------------------------------------
-    // EXECUCIÓ DEL RED TEAMING (TEST DE SEGURETAT IA)
-    // ---------------------------------------------------------------------------
     const executarTestSeguretat = async () => {
         const currentMission = missionsData[tabMissio]
         if (!currentMission) return
@@ -337,47 +358,60 @@ export default function AuthoringTool() {
 
     const generarCasAmbIA = async () => {
         if (!aiPromptInput.trim()) {
-            alert("Si us plau, introduïu una descripció per al cas d'estudi.")
+            alert("Si us plau, introduïu una descripció o dilema per al cas d'estudi.")
             return
         }
 
         setGeneratingAI(true)
+        setMissatge('Generant cas avançat amb arquitectura FARO V3...')
+
         try {
             const res = await fetch('/api/generate-template', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    prompt: aiPromptInput,
-                    sector: aiSectorInput,
-                    numFases: aiNumFases
+                    prompt: aiPromptInput.trim(),
+                    sector: aiSectorInput.trim(),
+                    numFases: aiNumFases,
+                    includeMissionZero: aiIncludeMissionZero,
+                    idioma: aiIdiomaInput
                 })
             })
 
             const data = await res.json()
 
-            if (data.error) {
-                alert(`Error en el generador de casos: ${data.error}`)
-            } else {
-                posthog.capture('template_ai_generated', {
-                    sector: aiSectorInput,
-                    template_id: data.id_template,
-                })
-                setEsEdicio(false)
-                setIsOfficialSelected(false)
-                setIdTemplate(data.id_template || generarCodiCurt())
-                setTitol(data.titol || 'Cas d\'estudi generat')
-                setWelcomeMessage(data.scenario_context?.welcome_message || '')
-                if (data.scenario_context?.missions) {
-                    setMissionsData(data.scenario_context.missions)
-                    const claus = Object.keys(data.scenario_context.missions)
-                    if (claus.length > 0) setTabMissio(claus[0])
-                }
-                setShowAIModal(false)
-                setAiPromptInput('')
-                setMissatge(`Cas d'estudi carregat a l'editor. Reviseu la configuració de les fases i premeu "Desar cas al catàleg" a la part inferior per publicar-lo.`)
+            if (!res.ok || data.error) {
+                throw new Error(data.error || "Error indeterminat en generar el cas.")
             }
+
+            posthog.capture('template_ai_generated', {
+                sector: aiSectorInput,
+                template_id: data.id_template,
+                has_mission_zero: aiIncludeMissionZero
+            })
+
+            setEsEdicio(false)
+            setIsOfficialSelected(false)
+            setIdTemplate(data.id_template)
+            setTitol(data.titol)
+            setWelcomeMessage(data.scenario_context?.welcome_message || 'Benvinguts a la simulació.')
+
+            if (data.scenario_context?.missions) {
+                setMissionsData(data.scenario_context.missions)
+                const claus = Object.keys(data.scenario_context.missions)
+                if (claus.length > 0) {
+                    setTabMissio(claus[0])
+                }
+            }
+
+            setShowAIModal(false)
+            setAiPromptInput('')
+            setMissatge(`✅ Cas [${data.id_template}] generat amb èxit. Reviseu les instruccions i premeu "Desar cas al catàleg".`)
+
         } catch (err: any) {
-            alert(`Error de connexió: ${err.message}`)
+            console.error('Error en generar el cas:', err)
+            alert(`❌ Error en el generador: ${err.message}`)
+            setMissatge(`Error en la generació: ${err.message}`)
         } finally {
             setGeneratingAI(false)
         }
@@ -457,6 +491,18 @@ export default function AuthoringTool() {
 
                 <div className="flex flex-wrap gap-2">
                     <button
+                        type="button"
+                        onClick={() => {
+                            setJsonInputModal(extreureJSONActual())
+                            setShowJSONModal(true)
+                        }}
+                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-mono text-xs py-2.5 px-3 rounded-xl transition-all border border-stone-200 cursor-pointer"
+                        title="Inspector i exportador de JSON"
+                    >
+                        {'{ }'} JSON Brut
+                    </button>
+
+                    <button
                         onClick={() => setShowAIModal(true)}
                         className="bg-stone-800 hover:bg-stone-900 text-stone-50 font-medium text-xs py-2.5 px-4 rounded-xl transition-all shadow-xs cursor-pointer"
                     >
@@ -474,29 +520,29 @@ export default function AuthoringTool() {
 
             {/* MODAL GENERADOR IA */}
             {showAIModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/30 backdrop-blur-xs p-4">
-                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-lg w-full shadow-xl space-y-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 backdrop-blur-xs p-4">
+                    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-5">
                         <div>
                             <span className="text-[10px] font-mono text-stone-400 uppercase tracking-widest block mb-1">
-                                GENERADOR DE CASOS D'ESTUDI
+                                GENERADOR DE CASOS D'ESTUDI // FARO V3
                             </span>
                             <h2 className="text-lg font-serif font-medium text-stone-900">
-                                Generació automàtica de casos
+                                Generació automàtica de simulació
                             </h2>
                             <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                                Indiqueu el context o el repte. El sistema generarà l'estructura completa del cas.
+                                El sistema aplicarà el marc pedagògic de les 4C (Contrasta, Cuestiona, Compara, Custodia) amb Escalera de Concesiones.
                             </p>
                         </div>
 
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-stone-700 mb-1">Sector o àmbit d'aplicació</label>
+                                    <label className="block text-xs font-medium text-stone-700 mb-1">Sector o àmbit</label>
                                     <input
                                         type="text"
                                         value={aiSectorInput}
                                         onChange={(e) => setAiSectorInput(e.target.value)}
-                                        placeholder="Ex: Recursos Humans, Sector Sanitari, Financer..."
+                                        placeholder="Ex: Recursos Humans, Sanitari, Financers..."
                                         className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white"
                                     />
                                 </div>
@@ -505,39 +551,67 @@ export default function AuthoringTool() {
                                     <input
                                         type="number"
                                         min={1}
-                                        max={6}
+                                        max={5}
                                         value={aiNumFases}
                                         onChange={(e) => setAiNumFases(parseInt(e.target.value, 10) || 3)}
-                                        className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white text-center"
+                                        className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-3.5 py-2 text-xs font-mono font-bold text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 text-center"
                                     />
                                 </div>
                             </div>
 
+                            <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="includeMissionZero"
+                                    checked={aiIncludeMissionZero}
+                                    onChange={(e) => setAiIncludeMissionZero(e.target.checked)}
+                                    className="mt-0.5 rounded text-stone-900 focus:ring-stone-400 cursor-pointer"
+                                />
+                                <label htmlFor="includeMissionZero" className="text-xs text-stone-700 cursor-pointer">
+                                    <span className="font-semibold text-stone-900 block">Incloure Missió 0 "A ciegas"</span>
+                                    Fase inicial de calentament sense avís de biaix per generar el primer xoc d'automatització.
+                                </label>
+                            </div>
                             <div>
-                                <label className="block text-xs font-medium text-stone-700 mb-1">Descripció del cas o dilema d'estudi *</label>
+                                <label className="block text-xs font-medium text-stone-700 mb-1">Idioma</label>
+                                <select
+                                    value={aiIdiomaInput}
+                                    onChange={(e) => setAiIdiomaInput(e.target.value as 'ca' | 'es' | 'en')}
+                                    className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-2 py-2 text-xs font-medium text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white cursor-pointer"
+                                >
+                                    <option value="ca">Català</option>
+                                    <option value="es">Castellà</option>
+                                    <option value="en">Anglès</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-stone-700 mb-1">Descripció del cas o dilema *</label>
                                 <textarea
                                     rows={4}
                                     value={aiPromptInput}
                                     onChange={(e) => setAiPromptInput(e.target.value)}
-                                    placeholder="Ex: Un algorisme de selecció de personal descarta automàticament sol·licituds de determinats perfils per optimitzar costos."
+                                    placeholder="Ex: Un algorisme de selecció de personal descarta automàticament sol·licituds de determinats perfils per optimitzar costos operatius."
                                     className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl p-3 text-xs text-stone-900 leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-400 focus:bg-white resize-none"
                                 />
                             </div>
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-2 border-t border-stone-100">
+                        <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
                             <button
+                                type="button"
                                 onClick={() => setShowAIModal(false)}
-                                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-4 py-2.5 rounded-xl cursor-pointer transition-colors"
+                                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
                             >
                                 Cancel·lar
                             </button>
                             <button
+                                type="button"
                                 onClick={generarCasAmbIA}
                                 disabled={generatingAI}
                                 className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-4 py-2.5 rounded-xl cursor-pointer shadow-xs disabled:opacity-50 transition-colors"
                             >
-                                {generatingAI ? 'Generant l\'estructura del cas...' : 'Generar cas'}
+                                {generatingAI ? 'Generant cas amb Zod...' : 'Generar cas ✨'}
                             </button>
                         </div>
                     </div>
@@ -839,12 +913,12 @@ export default function AuthoringTool() {
 
                                     <div>
                                         <label className="block text-xs font-medium text-stone-700 mb-1">Documentació de suport (Dossier de treball)</label>
-                                        <input
-                                            type="text"
+                                        <textarea
+                                            rows={3}
                                             disabled={isLocked}
                                             value={missionsData[tabMissio]?.evidenced_doc || ''}
                                             onChange={(e) => updateMissionField('evidenced_doc', e.target.value)}
-                                            className="w-full bg-white border border-stone-300 rounded-xl px-3.5 py-2 text-xs disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                                            className="w-full bg-white border border-stone-300 rounded-xl p-3 text-xs leading-relaxed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-stone-400 resize-y"
                                         />
                                     </div>
 
@@ -867,36 +941,24 @@ export default function AuthoringTool() {
                                                 Instruccions de la IA (System Prompt) *
                                             </label>
                                             {isLocked && (
-                                                <span className="text-[10px] font-mono text-stone-400">
-                                                    Contingut no editable
+                                                <span className="text-[10px] font-mono text-stone-400 font-bold bg-stone-100 px-2 py-0.5 rounded">
+                                                    🔒 LECTURA PROTEGIDA
                                                 </span>
                                             )}
                                         </div>
 
                                         <div className="relative overflow-hidden rounded-xl">
                                             <textarea
-                                                rows={6}
+                                                rows={8}
                                                 required={!isLocked}
                                                 disabled={isLocked}
-                                                value={
-                                                    isLocked
-                                                        ? "Instruccions de la plantilla oficial consolidades. Aquestes directrius estan reservades per al funcionament del sistema i no són editables des d'aquesta vista."
-                                                        : (missionsData[tabMissio]?.system_prompt || '')
-                                                }
+                                                value={missionsData[tabMissio]?.system_prompt || ''}
                                                 onChange={(e) => updateMissionField('system_prompt', e.target.value)}
                                                 className={`w-full border rounded-xl p-3 text-xs font-mono leading-relaxed transition-all resize-y focus:outline-none focus:ring-2 focus:ring-stone-400 ${isLocked
-                                                    ? 'bg-stone-100 text-stone-400 select-none blur-xs pointer-events-none'
+                                                    ? 'bg-stone-50 text-stone-400 select-none cursor-not-allowed opacity-70'
                                                     : 'bg-white border-stone-300 text-stone-800'
                                                     }`}
                                             />
-
-                                            {isLocked && (
-                                                <div className="absolute inset-0 flex items-center justify-center bg-stone-900/10 backdrop-blur-[1px] pointer-events-none">
-                                                    <div className="bg-stone-900/90 text-stone-50 font-mono text-xs px-4 py-2 rounded-xl shadow-md">
-                                                        Contingut no editable
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
 
@@ -1096,6 +1158,75 @@ export default function AuthoringTool() {
                     </div>
                 </div>
             )}
+
+            {/* MODAL DE INSPECTOR I IMPORTADOR DE JSON BRUT (SUPERADMIN) */}
+            {showJSONModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 backdrop-blur-xs p-4">
+                    <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-3xl w-full shadow-2xl space-y-4 max-h-[90vh] flex flex-col font-sans">
+
+                        <div className="flex justify-between items-center border-b border-stone-100 pb-3">
+                            <div>
+                                <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block">
+                                    SUPERADMIN AUDIT TOOL
+                                </span>
+                                <h2 className="text-base font-serif font-medium text-stone-900">
+                                    Inspector & Importador de JSON Brut
+                                </h2>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={copiarAlPortaretalls}
+                                    className="bg-stone-100 hover:bg-stone-200 text-stone-800 text-xs font-mono px-3 py-1.5 rounded-lg border border-stone-200 transition-colors cursor-pointer"
+                                >
+                                    {copiat ? '✓ Copiat!' : '📋 Copiar'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={descarregarJSON}
+                                    className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer shadow-xs"
+                                >
+                                    📥 Descarregar .json
+                                </button>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-stone-500 leading-relaxed">
+                            Pots editar el contingut JSON directament a continuació o enganxar-ne un de nou i prémer <strong>"Carregar JSON a l'editor"</strong> per actualitzar la interfície visual.
+                        </p>
+
+                        <textarea
+                            rows={16}
+                            value={jsonInputModal}
+                            onChange={(e) => setJsonInputModal(e.target.value)}
+                            className="w-full bg-stone-950 text-emerald-400 font-mono text-xs p-4 rounded-xl leading-relaxed focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none overflow-y-auto"
+                            spellCheck={false}
+                        />
+
+                        <div className="flex justify-between items-center pt-2 border-t border-stone-100">
+                            <button
+                                type="button"
+                                onClick={() => setShowJSONModal(false)}
+                                className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-medium px-4 py-2 rounded-xl transition-colors cursor-pointer"
+                            >
+                                Tancar
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={carregarJSONManual}
+                                className="bg-emerald-700 hover:bg-emerald-800 text-stone-50 text-xs font-medium px-5 py-2.5 rounded-xl cursor-pointer shadow-xs transition-colors"
+                            >
+                                ⚡ Carregar aquest JSON a l'editor
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
         </div>
     )
 }
