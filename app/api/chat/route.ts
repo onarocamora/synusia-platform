@@ -30,6 +30,7 @@ interface MissionConfig {
 
 interface RequestBody {
   id_equip: string;
+  id_sessio?: string;
   missio_actual: string | number;
   bot_id?: string;
   historial_missatges?: Message[];
@@ -429,6 +430,69 @@ Respon de forma natural i coherent amb el teu rol. L'input de l'usuari s'inclou 
     } catch (telemetryErr) {
       console.error('Error al registre de dades a Supabase:', telemetryErr);
     }
+
+
+    // 📊 GRAVACIÓ DE RESUM DE TELEMETRIA PER AL PILOT
+    // Detectem si s'ha desbloquejat la clau en aquesta resposta (buscant la icona 🔑 o la variable de victòria)
+    const unlockedKey = respostaText.includes('🔑') || (typeof hasVictoryKey !== 'undefined' && hasVictoryKey);
+
+    if (unlockedKey) {
+      try {
+        const momentA = body.moment_a_confidence ? Number(body.moment_a_confidence) : null;
+        const momentB = body.moment_b_certainty ? Number(body.moment_b_certainty) : null;
+        const totalPrompts = Array.isArray(messages) ? messages.filter((m: any) => m.role === 'user').length : 0;
+
+        await supabase
+          .from('pilot_evaluation_metrics')
+          .upsert(
+            {
+              id_sessio: idSessio || null,
+              id_equip: id_equip || null,
+              fase_id: String(missio_actual),
+              moment_a_confianca: momentA,
+              moment_b_seguretat: momentB,
+              prompts_enviats: totalPrompts,
+              completat_el: new Date().toISOString(),
+            },
+            { onConflict: 'id_equip,fase_id' }
+          );
+      } catch (metricsErr) {
+        console.error('Error no bloquejant desant mètriques del pilot:', metricsErr);
+      }
+    }
+
+    // --- INICI BLOC TELEMETRIA ---
+    const clauAconseguida = respostaText.includes('🔑'); // <-- ASSEGURA'T QUE 'respostaIA' ÉS EL NOM DE LA TEVA VARIABLE ON ESTÀ EL TEXT DEL BOT
+
+    if (clauAconseguida) {
+      console.log("🔥 ALERTA: Clau aconseguida! Intentant desar mètriques del pilot...");
+      try {
+        const { error: metricaError } = await supabase
+          .from('pilot_evaluation_metrics')
+          .upsert(
+            {
+              id_sessio: body.id_sessio || null,
+              id_equip: body.id_equip || null,
+              fase_id: String(body.missio_actual),
+              moment_a_confianca: body.moment_a_confidence ? Number(body.moment_a_confidence) : null,
+              moment_b_seguretat: body.moment_b_certainty ? Number(body.moment_b_certainty) : null,
+              prompts_enviats: body.messages ? body.messages.filter((m: any) => m.role === 'user').length : 0,
+              completat_el: new Date().toISOString(),
+            },
+            { onConflict: 'id_equip,fase_id' }
+          );
+
+        if (metricaError) {
+          console.error("❌ Supabase ha rebutjat la inserció:", metricaError);
+        } else {
+          console.log("✅ Mètriques de la fase desades a Supabase correctament.");
+        }
+      } catch (err) {
+        console.error('❌ Error catastròfic desant mètriques:', err);
+      }
+    }
+    // --- FI BLOC TELEMETRIA ---
+
 
     return NextResponse.json({
       content: respostaText,

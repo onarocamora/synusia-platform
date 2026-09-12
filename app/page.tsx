@@ -450,6 +450,30 @@ function SimulacioContent() {
         }
     };
 
+    // 🎯 DESAR MÈTRIQUES DEL PILOT A SUPABASE
+    const desarMetriquesFase = async (notaMomentB: number) => {
+        if (!idEquip) return;
+        try {
+            const totalPrompts = messages.filter(m => m.role === 'user').length;
+
+            const { error } = await supabase
+                .from('pilot_evaluation_metrics')
+                .upsert({
+                    id_sessio: idSessioGlobal || null,
+                    id_equip: idEquip,
+                    fase_id: String(missioActual),
+                    moment_a_confianca: momentAConfidence ? Number(momentAConfidence) : null,
+                    moment_b_seguretat: notaMomentB ? Number(notaMomentB) : null,
+                    prompts_enviats: totalPrompts,
+                    completat_el: new Date().toISOString()
+                }, { onConflict: 'id_equip,fase_id' });
+
+            if (error) console.error('Error desant mètriques:', error.message);
+        } catch (err) {
+            console.error('Excepció desant mètriques:', err);
+        }
+    };
+
     // Transició de Fase confirmada (post Moment B)
     const executarTransicioFase = (seguent: string) => {
         supabase
@@ -1200,10 +1224,13 @@ function SimulacioContent() {
                 isOpen={showModalB}
                 type="MOMENT_B"
                 botName={missioConfig?.bot_name || 'OmnIA'}
-                onConfirm={(rating) => {
+                onConfirm={async (rating) => {
                     setMomentBCertainty(rating);
                     setShowModalB(false);
                     posthog.capture('moment_b_certainty_set', { mission_id: missioActual, rating });
+
+                    // 🎯 GRAVAR TELEMETRIA COMPLETA A SUPABASE (Moment A + Moment B + Prompts)
+                    await desarMetriquesFase(rating);
 
                     if (pendingNextMission) {
                         executarTransicioFase(pendingNextMission);
@@ -1214,6 +1241,8 @@ function SimulacioContent() {
         </div>
     );
 }
+
+
 
 // ---------------------------------------------------------------------------
 // EXPORTACIÓ PRINCIPAL AMB EMBOLCALL SUSPENSE
