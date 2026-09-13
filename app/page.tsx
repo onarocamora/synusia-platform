@@ -57,35 +57,39 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
     const isMomentA = type === 'MOMENT_A';
 
     const title = isMomentA
-        ? `🎲 Aposta de Confiança Inicial (Moment A)`
-        : `🛡️ Seguretat de Validació Final (Moment B)`;
+        ? `Aposta de Confiança Inicial`
+        : `Seguretat de Validació Final`;
 
     const description = isMomentA
-        ? `L'assistent ${botName} us acaba de donar aquesta resposta. Sense mirar la documentació oficial en paper: quant us en refieu d'aquesta informació ara mateix?`
-        : `Heu detectat i corregit tots els errors? Quina seguretat teniu abans de signar l'auditoria?`;
+        ? `L'assistent ${botName} acaba de respondre. Sense mirar la informació del repte, quant et refies de la resposta?`
+        : `Heu detectat i corregit els errors? Quina seguretat teniu abans de signar l'auditoria?`;
 
     const labels = isMomentA
         ? ['1 - Cap confiança. Ho vull comprovar tot.', '2 - Em fa dubtar bastant.', '3 - Crec que està bé (Però ho revisaria).', '4 - Em refio bastant.', '5 - M\'ho crec al 100%. Ho enviaria tal qual.']
         : ['1 - Gens segurs. Hem anat a cegues.', '2 - Ens falta alguna cosa.', '3 - Bastant bé.', '4 - Molt segurs.', '5 - 100% segurs. Tot net.'];
 
+    const wrapperClasses = isMomentA
+        ? "fixed inset-0 z-40 flex items-end justify-center pb-20 px-4 pointer-events-none"
+        : "fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 animate-fade-in";
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 animate-fade-in">
-            <div className="w-full max-w-md bg-white border border-stone-200/90 rounded-2xl p-6 shadow-2xl text-stone-800 space-y-5">
+        <div className={wrapperClasses}>
+            <div className={`w-full max-w-md bg-white border-2 border-stone-200/90 rounded-2xl p-5 shadow-[0_-10px_40px_rgba(0,0,0,0.1)] text-stone-800 space-y-4 pointer-events-auto ${isMomentA ? 'animate-[slide-up_0.3s_ease-out]' : ''}`}>
                 <div>
                     <span className="text-[10px] font-mono tracking-widest text-amber-600 uppercase font-bold block mb-1">
-                        {isMomentA ? 'AUDITORIA EN TEMPS REAL · EVAL PREVIA' : 'AUDITORIA EN TEMPS REAL · VERIFICACIÓ'}
+                        {isMomentA ? 'EVALUACIÓ RÀPIDA' : 'AUDITORIA EN TEMPS REAL · VERIFICACIÓ'}
                     </span>
-                    <h3 className="text-lg font-serif font-medium text-stone-900">{title}</h3>
-                    <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">{description}</p>
+                    <h3 className="text-base font-serif font-medium text-stone-900">{title}</h3>
+                    <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">{description}</p>
                 </div>
 
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-5 gap-1.5">
                     {[1, 2, 3, 4, 5].map((val) => (
                         <button
                             key={val}
                             type="button"
                             onClick={() => setSelectedRating(val)}
-                            className={`flex flex-col items-center justify-center py-3 rounded-xl border font-bold text-sm transition-all cursor-pointer ${selectedRating === val
+                            className={`flex flex-col items-center justify-center py-2.5 rounded-xl border font-bold text-sm transition-all cursor-pointer ${selectedRating === val
                                 ? 'bg-amber-500 border-amber-600 text-stone-950 scale-105 shadow-md'
                                 : 'bg-[#FAF8F5] border-stone-200 text-stone-700 hover:bg-stone-100'
                                 }`}
@@ -96,7 +100,7 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
                 </div>
 
                 {selectedRating !== null && (
-                    <p className="text-center text-xs font-medium text-amber-800 bg-amber-50 py-2 rounded-lg border border-amber-200/60">
+                    <p className="text-center text-[11px] font-medium text-amber-800 bg-amber-50 py-1.5 rounded-lg border border-amber-200/60">
                         {labels[selectedRating - 1]}
                     </p>
                 )}
@@ -110,9 +114,9 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
                             setSelectedRating(null);
                         }
                     }}
-                    className="w-full py-3 rounded-xl bg-stone-900 text-stone-50 font-medium text-xs hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
+                    className="w-full py-2.5 rounded-xl bg-stone-900 text-stone-50 font-medium text-xs hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
                 >
-                    Confirmar i Continuar →
+                    Confirmar Votació →
                 </button>
             </div>
         </div>
@@ -195,10 +199,17 @@ function SimulacioContent() {
     const [faseEnquesta, setFaseEnquesta] = useState<'CAP' | 'PRE_TEST' | 'POST_TEST'>('CAP');
 
     // Estats de Missió, Plantilla i Escalabilitat
-    const [missioActual, setMissioActual] = useState<string>('MISION_1');
-    const missioActualRef = useRef<string>('MISION_1');
+    const [missioActual, setMissioActual] = useState<string>('0');
+    const missioActualRef = useRef<string>('0');
     const [missioConfig, setMissioConfig] = useState<MissionConfig | null>(null);
     const [notificacioCanviFase, setNotificacioCanviFase] = useState<string | null>(null);
+    const modalATimerRef = useRef<NodeJS.Timeout | null>(null);
+    const momentAProgramatRef = useRef<boolean>(false);
+
+    // 🎯 ARQUITECTURA MULTI-FASE PER PESTANYES I MANTENIMENT D'HISTÒRIC
+    const [historicXats, setHistoricXats] = useState<Record<string, Message[]>>({});
+    const [faseVisualitzada, setFaseVisualitzada] = useState<string>('0');
+    const [faseCompletada, setFaseCompletada] = useState<boolean>(false);
 
     const [idTemplateSessio, setIdTemplateSessio] = useState<string>('CAS_OMNIA_2026');
     const [idEquip, setIdEquip] = useState<string>('');
@@ -244,6 +255,8 @@ function SimulacioContent() {
     // Control de Temps
     const [tempsTranscorregut, setTempsTranscorregut] = useState<number>(0);
     const [sessioFinalitzada, setSessioFinalitzada] = useState<boolean>(false);
+
+
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
@@ -342,8 +355,7 @@ function SimulacioContent() {
         };
     }, [idEquip, enviat]);
 
-    // 🎯 CARREGAR MISSIÓ
-    // 🎯 CARREGAR MISSIÓ
+    // 🎯 CARREGAR MISSIÓ (Amb actualització de l'històric)
     const carregarMissio = async (idMissio: string, templateIdParam?: string, esForcatPerAdmin: boolean = false) => {
         try {
             const targetTemplate = templateIdParam || idTemplateSessio || 'CAS-FARO-V3-OFFICIAL';
@@ -354,12 +366,10 @@ function SimulacioContent() {
                 .eq('id_template', targetTemplate)
                 .single();
 
-            // Normalitzar la clau (extreu '1' tant de '1' com de 'MISION_1')
             const rawStr = String(idMissio);
             const numMatch = rawStr.match(/\d+/);
             const missioKey = numMatch ? numMatch[0] : rawStr;
 
-            // Cerca flexible al JSON de Supabase
             const missionsDict = data?.scenario_context?.missions || {};
             const configCustom =
                 missionsDict[idMissio] ||
@@ -373,12 +383,19 @@ function SimulacioContent() {
                 setMissioConfig(config);
                 setMissioActual(missioKey);
                 missioActualRef.current = missioKey;
+                setFaseVisualitzada(missioKey);
+                setFaseCompletada(false);
                 setCodiUnlock('');
                 setErrorUnlock('');
 
-                // Reiniciem valors de la nova fase
                 setMomentAConfidence(null);
                 setMomentBCertainty(null);
+                setShowModalA(false); // 👈 Tancar si estava obert
+                setShowModalB(false);
+
+                // 🎯 Cancel·lem temporitzadors pendents de la fase anterior
+                if (modalATimerRef.current) clearTimeout(modalATimerRef.current);
+                momentAProgramatRef.current = false;
 
                 if (esForcatPerAdmin) {
                     setNotificacioCanviFase(`⚡ El facilitador ha avançat la simulació a: ${config.titol}`);
@@ -393,7 +410,12 @@ function SimulacioContent() {
                     bot_name: config.bot_name || 'ORÁCULO'
                 };
 
-                setMessages([missatgeInicial]);
+                setHistoricXats(prev => {
+                    const existent = prev[missioKey];
+                    const finals = (existent && existent.length > 0) ? existent : [missatgeInicial];
+                    setMessages(finals);
+                    return { ...prev, [missioKey]: finals };
+                });
             }
         } catch (err) {
             console.error('Error al carregar la missió:', err);
@@ -433,7 +455,7 @@ function SimulacioContent() {
                 const templateCas = data.sessio?.id_template || 'CAS_OMNIA_2026';
                 setIdTemplateSessio(templateCas);
 
-                await carregarMissio('0', templateCas); // Inicia a la Missió 0: Escalfament d'Atlas Servicios Integrales
+                await carregarMissio('0', templateCas);
 
                 posthog.capture('session_joined', {
                     template_id: templateCas,
@@ -474,7 +496,7 @@ function SimulacioContent() {
         }
     };
 
-    // Transició de Fase confirmada (post Moment B)
+    // Transició de Fase confirmada
     const executarTransicioFase = (seguent: string) => {
         supabase
             .from('equips')
@@ -489,29 +511,63 @@ function SimulacioContent() {
             });
     };
 
-    // Validar Codi de Desbloqueig Manual
+    const continuarSeguentFase = () => {
+        setFaseCompletada(false);
+        if (pendingNextMission) {
+            executarTransicioFase(pendingNextMission);
+            setPendingNextMission(null);
+        }
+    };
+
+    // Validar Codi de Desbloqueig Manual (Flexible i a prova d'emojis)
     const handleUnlock = (e: React.FormEvent) => {
         e.preventDefault();
         if (!codiUnlock.trim()) return;
 
-        const codiIntroduit = codiUnlock.trim().toUpperCase();
-        const codiCorrecte = (missioConfig?.codi_desblocatge || missioConfig?.codi_correcte)?.toUpperCase();
+        // Funció interna per netejar emojis (🔑), espais i majúscules
+        const netejarText = (txt: string) => textClean(txt);
 
-        if (codiIntroduit === codiCorrecte) {
+        function textClean(txt: string) {
+            return txt.replace(/[🔑\s]/g, '').toUpperCase();
+        }
+
+        const codiIntroduit = netejarText(codiUnlock);
+        const rawCodiCorrecte = missioConfig?.codi_desblocatge || missioConfig?.codi_correcte || '';
+        const codiCorrecteBase = netejarText(rawCodiCorrecte);
+
+        // Clau de seguretat per defecte si la Fase 0 no la té definida a Supabase
+        const codiFallbackM0 = missioActual === '0' ? netejarText('FARO_M0_BENVINGUDA') : '';
+
+        // Comprovem si el codi és vàlid (per coincidència exacta o parcial)
+        const esValid = Boolean(
+            (codiCorrecteBase && (codiIntroduit === codiCorrecteBase || codiIntroduit.includes(codiCorrecteBase) || codiCorrecteBase.includes(codiIntroduit))) ||
+            (codiFallbackM0 && (codiIntroduit === codiFallbackM0 || codiIntroduit.includes(codiFallbackM0)))
+        );
+
+        if (esValid) {
+            const clauFinal = rawCodiCorrecte || 'FARO_M0_BENVINGUDA';
+
             posthog.capture('mission_unlocked', {
                 mission_id: missioActual,
-                next_mission: missioConfig?.seguent_missio || 'FINAL',
+                next_mission: missioConfig?.seguent_missio || '1',
             });
+
             setEvidencies(prev => [...prev, {
-                titol: missioConfig?.titol || 'Dada Extreta',
-                dada: codiCorrecte
+                titol: missioConfig?.titol || `Fase ${missioActual}`,
+                dada: clauFinal
             }]);
 
-            const seguent = missioConfig?.seguent_missio || 'FINAL';
+            // Determinem la següent missió
+            let seguent = missioConfig?.seguent_missio;
+            if (!seguent) {
+                const seguentNum = Number(missioActual) + 1;
+                seguent = seguentNum >= 5 ? 'FINAL' : seguentNum.toString();
+            }
+
             setPendingNextMission(seguent);
-            setShowModalB(true); // Obrir Modal B de seguretat abans de saltar
+            setShowModalB(true); // Obrim el Modal B de seguretat
         } else {
-            setErrorUnlock('❌ Codi no vàlid. Comproveu les evidències.');
+            setErrorUnlock('❌ Codi no vàlid. Comproveu la clau exacte del xat.');
         }
     };
 
@@ -543,8 +599,7 @@ function SimulacioContent() {
         }
     };
 
-    // Enviar Missatge al Xat amb Telemetria de Confiança
-    // Enviar Missatge al Xat amb Telemetria de Confiança
+    // Enviar Missatge al Xat amb Telemetria de Confiança (Protegit contra duplicats)
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!inputMessage.trim() || isTyping) return;
@@ -574,7 +629,6 @@ function SimulacioContent() {
                     missionId: missioActual,
                     messages: nousMissatges.map(m => ({ role: m.role, content: m.content })),
                     historial_missatges: nousMissatges.map(m => ({ role: m.role, content: m.content })),
-                    // Enviament dels paràmetres de telemetria FARO V3
                     moment_a_confidence: momentAConfidence,
                     moment_b_certainty: momentBCertainty,
                 })
@@ -588,25 +642,38 @@ function SimulacioContent() {
             }
 
             if (resposta.ok) {
-                setMessages(prev => [...prev, {
+                const assistantMsg: Message = {
                     role: 'assistant',
                     content: data.content || 'Sense resposta del sistema.',
                     bot_name: data.bot_name || missioConfig?.bot_name || 'ORÁCULO'
-                }]);
+                };
+
+                const nousTot = [...nousMissatges, assistantMsg];
+                setMessages(nousTot);
+
+                // 🎯 Desem sempre l'històric actualitzat de la fase activa
+                setHistoricXats(prev => ({
+                    ...prev,
+                    [missioActual]: nousTot
+                }));
+
                 if (data.credits_restants !== undefined) setCredits(data.credits_restants);
 
-                // 🎯 MOMENT A: Salta amb un retard perquè l'alumne tingui temps de llegir
-                if (momentAConfidence === null && !data.unlockedKey) {
-                    // Càlcul dinàmic: 30ms per caràcter (Mínim 3.5 segons, Màxim 8 segons)
-                    const tempsLecturaMs = Math.min(Math.max((data.content?.length || 0) * 30, 3500), 8000);
-                    setTimeout(() => {
+                const teLaClau = Boolean(data.unlockedKey) || assistantMsg.content.includes('🔑');
+
+                // 🎯 MOMENT A: Només es programa UNA SOLA VEGADA per fase
+                if (momentAConfidence === null && !teLaClau && !momentAProgramatRef.current) {
+                    momentAProgramatRef.current = true; // Bloquegem perquè cap altre missatge en crei un segon
+
+                    const tempsLecturaMs = Math.min(Math.max((assistantMsg.content?.length || 0) * 55, 4000), 25000);
+
+                    if (modalATimerRef.current) clearTimeout(modalATimerRef.current);
+                    modalATimerRef.current = setTimeout(() => {
                         setShowModalA(true);
                     }, tempsLecturaMs);
                 }
 
-                // 🛡️ MOMENT B: Si la IA lliura la clau 🔑, obrim el Modal B abans d'avançar
-                if (data.unlockedKey) {
-                    // Aquí també hi posem un petit retard d'1.5 segons perquè vegin la clau abans que salti el modal
+                if (teLaClau) {
                     setTimeout(() => {
                         const seguent = missioConfig?.seguent_missio || 'FINAL';
                         setPendingNextMission(seguent);
@@ -694,7 +761,7 @@ function SimulacioContent() {
                         <div className="flex justify-center mb-4">
                             <Image src="/logo.png" alt="Synusia Logo" width={140} height={40} priority />
                         </div>
-                        <h1 className="text-2xl font-serif font-medium text-stone-900">Accés a la Missió</h1>
+                        <h1 className="text-2xl font-serif font-medium text-stone-900">Accés a la Sessió</h1>
                         <div className="bg-[#FAF8F5] p-3 rounded-xl border border-stone-200 text-xs text-stone-600 italic">
                             Benvinguts/des a la simulació.
                         </div>
@@ -962,7 +1029,7 @@ function SimulacioContent() {
     // ---------------------------------------------------------------------------
     return (
         <div className="min-h-screen bg-[#FAF8F5] text-stone-800 flex flex-col font-sans selection:bg-amber-100">
-            <header className="sticky top-0 z-20 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 px-4 py-3">
+            <header className="sticky top-0 z-20 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 px-4 py-3 space-y-2">
                 <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 sm:gap-3">
                         <Image src="/logo.png" alt="Synusia Logo" width={100} height={28} className="object-contain" priority />
@@ -971,10 +1038,9 @@ function SimulacioContent() {
                             {nomsEquip}
                         </span>
 
-                        {/* BADGE FIX PER INDICAR CLARAMENT LA FASE ACTIVA */}
                         {missioConfig && (
                             <span className="text-[11px] sm:text-xs font-mono font-bold text-stone-800 bg-amber-100/90 border border-amber-300/80 px-2.5 py-1 rounded-md shadow-2xs">
-                                📍 {missioConfig.titol || missioActual}
+                                📍 {missioConfig.titol || `Fase ${missioActual}`}
                             </span>
                         )}
                     </div>
@@ -996,26 +1062,56 @@ function SimulacioContent() {
                     </div>
                 </div>
 
+                {/* 🎯 BARRA PESTANYES DE NAVEGACIÓ D'HISTÒRIC DE FASES */}
+                <div className="max-w-4xl mx-auto flex items-center gap-1.5 overflow-x-auto py-1">
+                    {['0', '1', '2', '3', '4'].map((faseNum) => {
+                        const esFaseCompletada = Number(faseNum) < Number(missioActual);
+                        const esFaseActiva = missioActual === faseNum;
+                        const esFaseBloquejada = Number(faseNum) > Number(missioActual);
+                        const esLaMirada = faseVisualitzada === faseNum;
+
+                        if (esFaseBloquejada) return null;
+
+                        return (
+                            <button
+                                key={faseNum}
+                                type="button"
+                                onClick={() => {
+                                    setFaseVisualitzada(faseNum);
+                                    setMessages(historicXats[faseNum] || []);
+                                }}
+                                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
+                                    ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
+                                    : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                    }`}
+                            >
+                                <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>
+                                <span>Fase {faseNum}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+
                 {/* BANNER D'AVÍS D'AVANÇAMENT DE FASE FORÇAT PEL FACILITADOR */}
                 {notificacioCanviFase && (
-                    <div className="mt-2 text-center bg-amber-500 text-stone-950 text-xs font-mono font-bold py-1.5 px-4 rounded-lg shadow-sm animate-pulse">
+                    <div className="text-center bg-amber-500 text-stone-950 text-xs font-mono font-bold py-1.5 px-4 rounded-lg shadow-sm animate-pulse">
                         {notificacioCanviFase}
                     </div>
                 )}
             </header>
 
             <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col justify-between">
-                <div className="space-y-6 pb-24">
+                <div className="space-y-6 pb-28">
                     {messages.map((msg, index) => (
                         <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                            <div className="flex items-center justify-between w-full max-w-[85%] sm:max-w-[78%] mb-1 px-1">
+                            <div className={`flex items-center mb-1 px-1 max-w-[85%] sm:max-w-[78%] ${msg.role === 'user' ? 'justify-end' : 'w-full justify-between'}`}>
                                 <span className="text-[11px] font-medium text-stone-400 uppercase">
                                     {msg.role === 'user' ? nomsEquip : (msg.bot_name || missioConfig?.bot_name || 'OmnIA')}
                                 </span>
                                 {msg.role === 'assistant' && (
                                     <button
                                         onClick={() => setMissatgeAReportar(msg)}
-                                        className="text-[10px] text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer"
+                                        className="text-[10px] text-stone-400 hover:text-red-600 transition-colors flex items-center gap-1 cursor-pointer ml-2"
                                         title="Reportar fallida d'IA"
                                     >
                                         🚩 Reportar
@@ -1039,25 +1135,67 @@ function SimulacioContent() {
                     <div ref={messagesEndRef} />
                 </div>
 
-                <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5] to-transparent pt-6 pb-4 px-4">
-                    <form onSubmit={handleSendMessage} className="max-w-3xl mx-auto flex gap-2">
-                        <input
-                            type="text"
-                            maxLength={2000}
-                            placeholder="Escriu la teva ordre o pregunta per a la IA..."
-                            value={inputMessage}
-                            onChange={(e) => setInputMessage(e.target.value)}
-                            disabled={isTyping}
-                            className="flex-1 bg-[#FAF8F5] sm:bg-white border border-stone-300/90 rounded-xl px-4 py-3 text-xs sm:text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-400 shadow-sm disabled:opacity-50"
-                        />
-                        <button
-                            type="submit"
-                            disabled={isTyping || !inputMessage.trim()}
-                            className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs sm:text-sm font-medium px-5 py-3 rounded-xl transition-colors disabled:opacity-40 cursor-pointer"
-                        >
-                            Enviar
-                        </button>
-                    </form>
+                <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-[#FAF8F5] via-[#FAF8F5] to-transparent pt-6 pb-4 px-4 z-10">
+                    <div className="max-w-3xl mx-auto space-y-2">
+                        {/* 🎯 BANNER DE CELEBRACIÓ I PAUSA EN COMPLETAR LA FASE (Disseny Corporatiu Integrat) */}
+                        {faseCompletada && faseVisualitzada === missioActual && (
+                            <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border border-stone-200/80 animate-[slide-up_0.3s_ease-out] flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div>
+                                    <span className="text-[10px] font-mono tracking-widest text-amber-600 uppercase font-bold block mb-1">
+                                        FASE SUPERADA
+                                    </span>
+                                    <h3 className="text-base font-serif font-medium text-stone-900">
+                                        Fase {missioActual} completada amb èxit
+                                    </h3>
+                                    <p className="text-[11px] text-stone-500 mt-1 leading-relaxed max-w-sm">
+                                        Preneu-vos un moment per revisar la conversa o consulteu el Dossier Operatiu abans de continuar la simulació.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={continuarSeguentFase}
+                                    className="w-full sm:w-auto bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs px-5 py-3 rounded-xl transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                                >
+                                    Avançar a la Següent Fase →
+                                </button>
+                            </div>
+                        )}
+
+                        {/* MODE LECTURA D'HISTÒRIC PASSAT */}
+                        {faseVisualitzada !== missioActual ? (
+                            <div className="bg-stone-200/80 border border-stone-300 rounded-xl p-3 text-center text-xs font-mono text-stone-600">
+                                🔒 Mode Lectura (Històric de la Fase {faseVisualitzada}). Per continuar jugant, torna a la{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFaseVisualitzada(missioActual);
+                                        setMessages(historicXats[missioActual] || []);
+                                    }}
+                                    className="underline font-bold text-stone-900 cursor-pointer"
+                                >
+                                    Fase {missioActual} (Activa)
+                                </button>.
+                            </div>
+                        ) : (
+                            <form onSubmit={handleSendMessage} className="flex gap-2">
+                                <input
+                                    type="text"
+                                    maxLength={2000}
+                                    placeholder="Escriu la teva ordre o pregunta per a la IA..."
+                                    value={inputMessage}
+                                    onChange={(e) => setInputMessage(e.target.value)}
+                                    disabled={isTyping || faseCompletada}
+                                    className="flex-1 bg-[#FAF8F5] sm:bg-white border border-stone-300/90 rounded-xl px-4 py-3 text-xs sm:text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-400 shadow-sm disabled:opacity-50"
+                                />
+                                <button
+                                    type="submit"
+                                    disabled={isTyping || !inputMessage.trim() || faseCompletada}
+                                    className="bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs sm:text-sm font-medium px-5 py-3 rounded-xl transition-colors disabled:opacity-40 cursor-pointer"
+                                >
+                                    Enviar
+                                </button>
+                            </form>
+                        )}
+                    </div>
                     <p className="text-[10px] text-stone-400 text-center leading-tight selection:bg-stone-200 mt-2">
                         La IA pot cometre errors. Contingut i actors simulats artificialment amb caràcter pedagògic no vinculant.
                     </p>
@@ -1215,6 +1353,7 @@ function SimulacioContent() {
                 onConfirm={(rating) => {
                     setMomentAConfidence(rating);
                     setShowModalA(false);
+                    if (modalATimerRef.current) clearTimeout(modalATimerRef.current); // 👈 Neteja de seguretat
                     posthog.capture('moment_a_confidence_set', { mission_id: missioActual, rating });
                 }}
             />
@@ -1229,20 +1368,16 @@ function SimulacioContent() {
                     setShowModalB(false);
                     posthog.capture('moment_b_certainty_set', { mission_id: missioActual, rating });
 
-                    // 🎯 GRAVAR TELEMETRIA COMPLETA A SUPABASE (Moment A + Moment B + Prompts)
+                    // 🎯 GRAVAR TELEMETRIA COMPLETA A SUPABASE
                     await desarMetriquesFase(rating);
 
-                    if (pendingNextMission) {
-                        executarTransicioFase(pendingNextMission);
-                        setPendingNextMission(null);
-                    }
+                    // 🎯 En lloc de saltar pantalles de cop, parem i mostrem el banner de celebració!
+                    setFaseCompletada(true);
                 }}
             />
         </div>
     );
 }
-
-
 
 // ---------------------------------------------------------------------------
 // EXPORTACIÓ PRINCIPAL AMB EMBOLCALL SUSPENSE
