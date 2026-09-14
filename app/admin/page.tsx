@@ -715,7 +715,7 @@ export default function AdminDashboard() {
         </main>
 
         <footer className="max-w-5xl w-full mx-auto text-center py-4 text-[11px] text-stone-400 font-mono">
-          Synusia Platform &copy; {new Date().getFullYear()}
+          Nucli Innovation S.L.&copy; {new Date().getFullYear()}
         </footer>
       </div>
     )
