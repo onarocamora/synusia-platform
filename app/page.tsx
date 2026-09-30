@@ -515,7 +515,7 @@ function SimulacioContent() {
 
         // 🎯 Netegem espais i forcem majúscules
         const pinNormalitzat = pin.trim().toUpperCase();
-        if (!pinNormalitzat || !nomsEquip || !riscIA) return;
+        if (!pinNormalitzat || !nomsEquip) return;
 
         setLoading(true);
         setErrorText('');
@@ -534,7 +534,7 @@ function SimulacioContent() {
                 await supabase
                     .from('equips')
                     .update({
-                        dossier_actiu: { reflexio_individual: riscIA, integrants: nomsEquip, consentiment_informat: true, data_consentiment: new Date().toISOString() }
+                        dossier_actiu: { integrants: nomsEquip, consentiment_informat: true, data_consentiment: new Date().toISOString() }
                     })
                     .eq('id_equip', data.equip.id_equip);
 
@@ -952,19 +952,6 @@ function SimulacioContent() {
                             />
                         </div>
 
-                        <div>
-                            <label className="block text-xs font-medium text-stone-600 mb-1">Quin procés, tasca o decisió del vostre sector no es pot automatitzar amb IA, i tot i així es fa?</label>
-                            <textarea
-                                required
-                                rows={2}
-                                maxLength={500}
-                                placeholder="Reflexió inicial..."
-                                value={riscIA}
-                                onChange={(e) => setRiscIA(e.target.value)}
-                                className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl p-3 text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-stone-400 resize-none"
-                            />
-                        </div>
-
                         <div className="bg-stone-50 border border-stone-200/80 rounded-xl p-3 mt-4">
                             <label className="flex items-start gap-3 cursor-pointer group">
                                 <div className="flex-shrink-0 mt-0.5">
@@ -1254,8 +1241,8 @@ function SimulacioContent() {
                                             setMessages(historicXats[faseKey] || []);
                                         }}
                                         className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
-                                                ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
-                                                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                            ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
+                                            : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
                                             }`}
                                     >
                                         <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>

@@ -98,15 +98,34 @@ export default function AuthoringTool() {
     const [copiat, setCopiat] = useState(false)
 
     const extreureJSONActual = () => {
-        return JSON.stringify({
+        const casObjecte = {
             id_template: idTemplate,
-            titol: titol,
-            is_official: isOfficialSelected && isSuperAdmin,
+            titol,
             scenario_context: {
                 welcome_message: welcomeMessage,
                 missions: missionsData
             }
-        }, null, 2)
+        }
+
+        // 🛡️ Doble blindatge: Si la plantilla està bloquejada i NO és superadmin, netegem els prompts
+        if (isLocked && !isSuperAdmin) {
+            const casNetejat = JSON.parse(JSON.stringify(casObjecte))
+
+            if (casNetejat.scenario_context?.missions) {
+                Object.keys(casNetejat.scenario_context.missions).forEach((faseKey) => {
+                    casNetejat.scenario_context.missions[faseKey].system_prompt = "[PROTEGIT]"
+
+                    if (Array.isArray(casNetejat.scenario_context.missions[faseKey].bots)) {
+                        casNetejat.scenario_context.missions[faseKey].bots.forEach((bot: any) => {
+                            bot.system_prompt = "[PROTEGIT]"
+                        })
+                    }
+                })
+            }
+            return JSON.stringify(casNetejat, null, 2)
+        }
+
+        return JSON.stringify(casObjecte, null, 2)
     }
 
     const descarregarJSON = () => {
@@ -490,19 +509,23 @@ export default function AuthoringTool() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setJsonInputModal(extreureJSONActual())
-                            setShowJSONModal(true)
-                        }}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-mono text-xs py-2.5 px-3 rounded-xl transition-all border border-stone-200 cursor-pointer"
-                        title="Inspector i exportador de JSON"
-                    >
-                        {'{ }'} JSON Brut
-                    </button>
+                    {/* 🔒 El botó JSON Brut només s'imprimeix si el cas NO està bloquejat O si és SuperAdmin */}
+                    {(!isLocked || isSuperAdmin) && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setJsonInputModal(extreureJSONActual())
+                                setShowJSONModal(true)
+                            }}
+                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-mono text-xs py-2.5 px-3 rounded-xl transition-all border border-stone-200 cursor-pointer"
+                            title="Inspector i exportador de JSON"
+                        >
+                            {'{ }'} JSON Brut
+                        </button>
+                    )}
 
                     <button
+                        type="button"
                         onClick={() => setShowAIModal(true)}
                         className="bg-stone-800 hover:bg-stone-900 text-stone-50 font-medium text-xs py-2.5 px-4 rounded-xl transition-all shadow-xs cursor-pointer"
                     >
@@ -510,6 +533,7 @@ export default function AuthoringTool() {
                     </button>
 
                     <button
+                        type="button"
                         onClick={iniciarNovaPlantilla}
                         className="bg-stone-900 hover:bg-stone-800 text-stone-50 font-medium text-xs py-2.5 px-4 rounded-xl transition-all shadow-xs cursor-pointer"
                     >
@@ -966,7 +990,7 @@ export default function AuthoringTool() {
                                                         <span className="text-base mb-1">🔒</span>
                                                         <p className="text-xs font-semibold text-stone-800">System Prompt Protegit</p>
                                                         <p className="text-[11px] text-stone-500 max-w-xs mt-0.5">
-                                                            Les instruccions de les plantilles oficials estan protegides per drets de propietat intel·lectual.
+                                                            Les instruccions de les plantilles oficials estan protegides.
                                                         </p>
                                                     </div>
                                                 </div>
