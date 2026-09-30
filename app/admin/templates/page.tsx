@@ -478,7 +478,7 @@ export default function AuthoringTool() {
                         ← Tornar al taulell de control
                     </Link>
                     <div className="flex items-center gap-3 mt-1">
-                        <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
+                        <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain h-8 w-auto" priority />
                         <span className="text-stone-300">|</span>
                         <h1 className="text-xl font-serif font-medium tracking-tight text-stone-900">
                             Gestor de Casos

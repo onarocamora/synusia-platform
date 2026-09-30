@@ -652,7 +652,7 @@ export default function AdminDashboard() {
       <div className="min-h-screen flex flex-col justify-between bg-[#FAF8F5] text-stone-800 font-sans p-6 selection:bg-stone-200">
         <header className="max-w-5xl w-full mx-auto flex justify-between items-center py-4">
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
+            <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain h-8 w-auto" priority />
           </div>
           <span className="text-[10px] font-mono px-3 py-1.5 bg-white border border-stone-200 text-stone-500 rounded-md shadow-xs uppercase tracking-wider">
             Plataforma d'Avaluació
@@ -732,7 +732,7 @@ export default function AdminDashboard() {
         </button>
 
         <div className="text-center space-y-8">
-          <Image src="/logo.png" alt="Synusia Logo" width={180} height={50} className="mx-auto mb-6 opacity-90 object-contain" priority />
+          <Image src="/logo.png" alt="Synusia Logo" width={180} height={50} className="mx-auto mb-6 opacity-90 object-contain h-8 w-auto" priority />
           <h1 className="text-3xl sm:text-4xl font-serif text-stone-900">Accés a la Simulació</h1>
           <p className="text-lg text-stone-500 font-mono bg-stone-100/80 px-4 py-1.5 rounded-full inline-block border border-stone-200/60">
             app.synusia.io
@@ -757,7 +757,7 @@ export default function AdminDashboard() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-stone-200/80 pb-6 mb-6 gap-4 no-print">
         <div>
           <div className="flex items-center gap-3">
-            <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain" priority />
+            <Image src="/logo.png" alt="Synusia Logo" width={110} height={30} className="object-contain h-8 w-auto" priority />
             <span className="text-stone-300">|</span>
             <h1 className="text-xl font-serif font-medium tracking-tight text-stone-900">
               Taulell de Control

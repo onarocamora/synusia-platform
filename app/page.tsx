@@ -188,6 +188,10 @@ function SimulacioContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // 🛡️ CONTROL DE SUPERADMIN PER A LA VISTA JSON
+    const isSuperAdmin = searchParams.get('superadmin') === 'true' || searchParams.get('mode') === 'superadmin';
+    const [mostrarRawJSON, setMostrarRawJSON] = useState<boolean>(false);
+
     // Estats globals de la simulació
     const [credits, setCredits] = useState<number | null>(null);
     const [evidencies, setEvidencies] = useState<{ titol: string; dada: string }[]>([]);
@@ -322,6 +326,53 @@ function SimulacioContent() {
         };
     }, [pin, enviat]);
 
+    useEffect(() => {
+        const autoRecuperarSessio = async () => {
+            const sessioGuardada = localStorage.getItem('synusia_active_session');
+            if (!sessioGuardada) return;
+
+            try {
+                const { idEquip: savedEquipId, idSessioGlobal: savedSessioId, idTemplateSessio: savedTemplate, missioActual: savedMissio } = JSON.parse(sessioGuardada);
+
+                if (!savedEquipId) return;
+
+                // 🔍 Verifiquem a Supabase que l'equip i la sessió continuen existint i no estan tancats
+                const { data: equipData, error } = await supabase
+                    .from('equips')
+                    .select('id_equip, dossier_actiu')
+                    .eq('id_equip', savedEquipId)
+                    .single();
+
+                if (error || !equipData) {
+                    // Si la sessió s'ha esborrat o hi ha error, netegem
+                    localStorage.removeItem('synusia_active_session');
+                    return;
+                }
+
+                // 🔄 Restaurem els estats globals de l'aplicació
+                setIdEquip(savedEquipId);
+                if (savedSessioId) setIdSessioGlobal(savedSessioId);
+
+                const template = savedTemplate || 'CAS_OMNIA_2026';
+                setIdTemplateSessio(template);
+
+                // Carreguem la missió on s'havia quedat l'equip
+                const faseARecuperar = savedMissio || '0';
+                await carregarMissio(faseARecuperar, template);
+
+                // Ocultem la pantalla d'accés (PIN) i entrem directament a la simulació
+                setFaseEnquesta('PRE_TEST');
+                setEnviat(true);
+
+            } catch (err) {
+                console.warn('Error en autosincronitzar la sessió local:', err);
+                localStorage.removeItem('synusia_active_session');
+            }
+        };
+
+        autoRecuperarSessio();
+    }, []); // 👈 S'executa només 1 vegada al carregar el component
+
     // 🎯 SINCRONITZACIÓ EN TEMPS REAL: FORÇAR SALT DE FASE I NOTIFICAR L'ALUMNE
     useEffect(() => {
         if (!idEquip || !enviat) return;
@@ -371,19 +422,38 @@ function SimulacioContent() {
             const missioKey = numMatch ? numMatch[0] : rawStr;
 
             const missionsDict = data?.scenario_context?.missions || {};
-            const configCustom =
-                missionsDict[idMissio] ||
-                missionsDict[missioKey] ||
-                missionsDict[`MISION_${missioKey}`];
 
+            // 🔍 1. Cerca intel·ligent de la clau exacta o per número
+            let clauReal = Object.keys(missionsDict).find(k =>
+                k === idMissio ||
+                k === missioKey ||
+                k === `MISION_${missioKey}` ||
+                (k.match(/\d+/) && k.match(/\d+/)![0] === missioKey)
+            );
+
+            // 🎯 2. FALLBACK PER A INICI DE SESSIÓ: Si demanen '0' i la plantilla comença per 'MISION_1' o '1'
+            if (!clauReal && (missioKey === '0' || missioKey === '1')) {
+                const clausDisponibles = Object.keys(missionsDict);
+                if (clausDisponibles.length > 0) {
+                    clauReal = clausDisponibles[0]; // Agafa la primera clau de la plantilla (ex: 'MISION_1')
+                }
+            }
+
+            const configCustom = clauReal ? missionsDict[clauReal] : undefined;
             const configFallback = defaultStoryline.config_missions.missions[idMissio as keyof typeof defaultStoryline.config_missions.missions];
             const config = configCustom || configFallback;
 
+            const clauDefinitiva = clauReal || missioKey;
+
             if (config) {
-                setMissioConfig(config);
-                setMissioActual(missioKey);
-                missioActualRef.current = missioKey;
-                setFaseVisualitzada(missioKey);
+                // 🛡️ Neteja de seguretat: eliminem el system_prompt per no exposar-lo al navegador/React DevTools
+                const configSanititzada = { ...config };
+                delete configSanititzada.system_prompt;
+
+                setMissioConfig(configSanititzada);
+                setMissioActual(clauDefinitiva);
+                missioActualRef.current = clauDefinitiva;
+                setFaseVisualitzada(clauDefinitiva);
                 setFaseCompletada(false);
                 setCodiUnlock('');
                 setErrorUnlock('');
@@ -411,21 +481,35 @@ function SimulacioContent() {
                 };
 
                 setHistoricXats(prev => {
-                    const existent = prev[missioKey];
+                    const existent = prev[clauDefinitiva];
                     const finals = (existent && existent.length > 0) ? existent : [missatgeInicial];
                     setMessages(finals);
-                    return { ...prev, [missioKey]: finals };
+                    return { ...prev, [clauDefinitiva]: finals };
                 });
+
+                // Dins del bloc `if (config)` de carregarMissio:
+                const sessioLocal = localStorage.getItem('synusia_active_session');
+                if (sessioLocal) {
+                    const dadesLocals = JSON.parse(sessioLocal);
+                    localStorage.setItem('synusia_active_session', JSON.stringify({
+                        ...dadesLocals,
+                        missioActual: clauDefinitiva // 👈 Actualitzem la fase on es troba ara l'equip
+                    }));
+                }
             }
         } catch (err) {
             console.error('Error al carregar la missió:', err);
         }
     };
 
-    // Inicialitzar Sessió
+    // Inicialitzar Sessió (amb persistència en cas de tancar el navegador)
     const handleInicialitzar = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!pin || !nomsEquip || !riscIA) return;
+
+        // 🎯 Netegem espais i forcem majúscules
+        const pinNormalitzat = pin.trim().toUpperCase();
+        if (!pinNormalitzat || !nomsEquip || !riscIA) return;
+
         setLoading(true);
         setErrorText('');
 
@@ -433,7 +517,7 @@ function SimulacioContent() {
             const resposta = await fetch('/api/join-session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pin, nomsEquip })
+                body: JSON.stringify({ pin: pinNormalitzat, nomsEquip })
             });
             const data = await resposta.json();
 
@@ -462,6 +546,14 @@ function SimulacioContent() {
                     mission_start: '0',
                 });
 
+                // 💾 GUARDA DE SEGURETAT: Guardem la sessió activa al local storage
+                localStorage.setItem('synusia_active_session', JSON.stringify({
+                    idEquip: data.equip.id_equip,
+                    idSessioGlobal: data.sessio?.id_sessio || null,
+                    idTemplateSessio: templateCas,
+                    missioActual: '0'
+                }));
+
                 setFaseEnquesta('PRE_TEST');
                 setEnviat(true);
             }
@@ -472,29 +564,73 @@ function SimulacioContent() {
         }
     };
 
-    // 🎯 DESAR MÈTRIQUES DEL PILOT A SUPABASE
+
+    // 🎯 DESAR MÈTRIQUES DEL PILOT A SUPABASE (Amb gestió de cua Offline)
     const desarMetriquesFase = async (notaMomentB: number) => {
         if (!idEquip) return;
-        try {
-            const totalPrompts = messages.filter(m => m.role === 'user').length;
 
+        const totalPrompts = messages.filter(m => m.role === 'user').length;
+
+        // 1. Creem l'objecte de mètriques unificat
+        const metricaPayload = {
+            id_sessio: idSessioGlobal || null,
+            id_equip: idEquip,
+            fase_id: String(missioActual),
+            moment_a_confianca: momentAConfidence ? Number(momentAConfidence) : null,
+            moment_b_seguretat: notaMomentB ? Number(notaMomentB) : null,
+            prompts_enviats: totalPrompts,
+            completat_el: new Date().toISOString()
+        };
+
+        // 2. Si estem directament sense xarxa, desem a localStorage i sortim
+        if (typeof window !== 'undefined' && !navigator.onLine) {
+            const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
+            cua.push(metricaPayload);
+            localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
+            return;
+        }
+
+        // 3. Si estem online, intentem enviar-ho a Supabase
+        try {
             const { error } = await supabase
                 .from('pilot_evaluation_metrics')
-                .upsert({
-                    id_sessio: idSessioGlobal || null,
-                    id_equip: idEquip,
-                    fase_id: String(missioActual),
-                    moment_a_confianca: momentAConfidence ? Number(momentAConfidence) : null,
-                    moment_b_seguretat: notaMomentB ? Number(notaMomentB) : null,
-                    prompts_enviats: totalPrompts,
-                    completat_el: new Date().toISOString()
-                }, { onConflict: 'id_equip,fase_id' });
+                .upsert(metricaPayload, { onConflict: 'id_equip,fase_id' });
 
-            if (error) console.error('Error desant mètriques:', error.message);
+            if (error) {
+                console.error('Error desant mètriques a Supabase:', error.message);
+                // Si la BBDD falla, desem a la cua de seguretat
+                if (typeof window !== 'undefined') {
+                    const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
+                    cua.push(metricaPayload);
+                    localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
+                }
+            }
         } catch (err) {
-            console.error('Excepció desant mètriques:', err);
+            console.error('Excepció de xarxa en desar mètriques:', err);
+            if (typeof window !== 'undefined') {
+                const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
+                cua.push(metricaPayload);
+                localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
+            }
         }
     };
+
+    // 🔄 Escoltar quan torna la connexió per buidar la cua a Supabase
+    useEffect(() => {
+        const sincronitzarCua = async () => {
+            if (typeof window === 'undefined') return;
+            const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
+            if (cua.length > 0 && navigator.onLine && idEquip) {
+                for (const item of cua) {
+                    await supabase.from('pilot_evaluation_metrics').upsert(item, { onConflict: 'id_equip,fase_id' });
+                }
+                localStorage.removeItem('faro_offline_queue');
+            }
+        };
+
+        window.addEventListener('online', sincronitzarCua);
+        return () => window.removeEventListener('online', sincronitzarCua);
+    }, [idEquip]);
 
     // Transició de Fase confirmada
     const executarTransicioFase = (seguent: string) => {
@@ -694,37 +830,46 @@ function SimulacioContent() {
     // Enviar Informe Final
     const handleEnviarInforme = async () => {
         if (!informeText.trim() || !idEquip) return;
+        setLoading(true);
 
         try {
+            // 1. Obtenim el dossier actual per no perdre els integrants ni el consentiment
             const { data: equipActual } = await supabase
                 .from('equips')
                 .select('dossier_actiu')
                 .eq('id_equip', idEquip)
                 .single();
 
-            const dossierActualitzat = {
-                ...(equipActual?.dossier_actiu || {}),
-                informe_final: informeText,
-                data_enviament: new Date().toISOString()
-            };
+            const dossierPrevi = equipActual?.dossier_actiu || {};
 
-            const { error } = await supabase
+            // 2. Guardem a la columna dedicada 'informe_final' I fusionem el JSON
+            await supabase
                 .from('equips')
-                .update({ dossier_actiu: dossierActualitzat })
+                .update({
+                    informe_final: informeText, // 👈 Omple la columna dedicada
+                    dossier_actiu: {
+                        ...dossierPrevi,        // 👈 Conserva les dades anteriors
+                        informe_final: informeText,
+                        completat_el: new Date().toISOString()
+                    }
+                })
                 .eq('id_equip', idEquip);
 
-            if (!error) {
-                posthog.capture('final_report_submitted', {
-                    report_length: informeText.length,
-                    evidencies_count: evidencies.length,
-                });
+            // 🧹 2. NETEJA DE SEGURETAT: Com que han acabat, esborrem la sessió del navegador
+            localStorage.removeItem('synusia_active_session');
 
-                setFaseEnquesta('POST_TEST');
-            } else {
-                alert("Hi ha hagut un error en desar l'informe. Torna-ho a intentar.");
-            }
+            // 3. Mostrem la pantalla de confirmació ("Simulació Completada")
+            setInformeEnviat(true);
+
+            posthog.capture('report_submitted', {
+                id_equip: idEquip,
+                informe_length: informeText.length
+            });
+
         } catch (err) {
-            alert("Error de xarxa. Torna-ho a intentar.");
+            console.error('Error en enviar l\'informe:', err);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -759,7 +904,7 @@ function SimulacioContent() {
                 <main className="w-full max-w-md space-y-6 bg-white p-8 rounded-2xl border border-stone-200/80 shadow-sm">
                     <div className="text-center space-y-2">
                         <div className="flex justify-center mb-4">
-                            <Image src="/logo.png" alt="Synusia Logo" width={140} height={40} priority />
+                            <Image src="/logo.png" alt="Synusia Logo" width={140} height={40} priority className="h-8 w-auto" />
                         </div>
                         <h1 className="text-2xl font-serif font-medium text-stone-900">Accés a la Sessió</h1>
                         <div className="bg-[#FAF8F5] p-3 rounded-xl border border-stone-200 text-xs text-stone-600 italic">
@@ -782,7 +927,7 @@ function SimulacioContent() {
                                 maxLength={10}
                                 placeholder="Ex: 1234"
                                 value={pin}
-                                onChange={(e) => setPin(e.target.value)}
+                                onChange={(e) => setPin(e.target.value.toUpperCase())}
                                 className="w-full bg-[#FAF8F5] border border-stone-300 rounded-xl px-4 py-3 text-center text-lg font-mono font-bold text-stone-900 tracking-widest focus:outline-none focus:ring-2 focus:ring-stone-400 uppercase"
                             />
                         </div>
@@ -1032,7 +1177,7 @@ function SimulacioContent() {
             <header className="sticky top-0 z-20 bg-[#FAF8F5]/90 backdrop-blur-md border-b border-stone-200/80 px-4 py-3 space-y-2">
                 <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 sm:gap-3">
-                        <Image src="/logo.png" alt="Synusia Logo" width={100} height={28} className="object-contain" priority />
+                        <Image src="/logo.png" alt="Synusia Logo" width={100} height={28} className="object-contain h-8 w-auto" priority />
                         <span className="text-stone-300">|</span>
                         <span className="text-xs font-medium text-stone-700 bg-stone-200/60 px-2.5 py-1 rounded-md">
                             {nomsEquip}
@@ -1281,6 +1426,36 @@ function SimulacioContent() {
                                     </ul>
                                 </div>
                             )}
+
+                            {/* 🛡️ VISTA RAW JSON RESTRET PRINGADAMENT A SUPERADMINS (NO ADMINS NORMALS) */}
+                            {isSuperAdmin && (
+                                <div className="border-t border-stone-200 pt-4 mt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setMostrarRawJSON(!mostrarRawJSON)}
+                                        className="text-[10px] font-mono text-stone-500 hover:text-stone-800 underline cursor-pointer"
+                                    >
+                                        {mostrarRawJSON ? 'Amagar Raw JSON' : '🔍 Veure Raw JSON (Només Superadmin)'}
+                                    </button>
+
+                                    {mostrarRawJSON && (
+                                        <pre className="mt-2 p-3 bg-stone-900 text-emerald-400 font-mono text-[10px] rounded-xl overflow-x-auto max-h-48 leading-tight selection:bg-emerald-900">
+                                            {JSON.stringify(
+                                                missioConfig,
+                                                (key, value) => {
+                                                    // 🔒 Si troba la clau "system_prompt", la substitueix per un avís o l'omet
+                                                    if (key === 'system_prompt') {
+                                                        return '[🔒 PROMPT DEL SISTEMA PROTEGIT I OMÈS]';
+                                                    }
+                                                    return value;
+                                                },
+                                                2
+                                            )}
+                                        </pre>
+                                    )}
+                                </div>
+                            )}
+
                         </div>
                         <div className="pt-4 border-t border-stone-100 mt-6">
                             <button onClick={() => setDossierObert(false)} className="w-full bg-stone-900 hover:bg-stone-800 text-stone-50 text-xs font-medium py-2.5 rounded-xl transition-colors cursor-pointer">Amagar Dossier</button>
