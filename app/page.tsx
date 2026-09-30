@@ -260,7 +260,7 @@ function SimulacioContent() {
     const [tempsTranscorregut, setTempsTranscorregut] = useState<number>(0);
     const [sessioFinalitzada, setSessioFinalitzada] = useState<boolean>(false);
 
-
+    const [missioConfigAll, setMissioConfigAll] = useState<Record<string, any> | null>(null);
 
     const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     useEffect(() => { scrollToBottom(); }, [messages, isTyping]);
@@ -332,35 +332,41 @@ function SimulacioContent() {
             if (!sessioGuardada) return;
 
             try {
-                const { idEquip: savedEquipId, idSessioGlobal: savedSessioId, idTemplateSessio: savedTemplate, missioActual: savedMissio } = JSON.parse(sessioGuardada);
-
+                const { idEquip: savedEquipId, missioActual: savedMissio } = JSON.parse(sessioGuardada);
                 if (!savedEquipId) return;
 
-                // 🔍 Verifiquem a Supabase que l'equip i la sessió continuen existint i no estan tancats
-                const { data: equipData, error } = await supabase
+                // 🔍 1. Comprovem que l'equip existeix a Supabase
+                const { data: equipData, error: equipErr } = await supabase
                     .from('equips')
-                    .select('id_equip, dossier_actiu')
+                    .select('id_equip, id_sessio')
                     .eq('id_equip', savedEquipId)
                     .single();
 
-                if (error || !equipData) {
-                    // Si la sessió s'ha esborrat o hi ha error, netegem
+                if (equipErr || !equipData) {
                     localStorage.removeItem('synusia_active_session');
                     return;
                 }
 
-                // 🔄 Restaurem els estats globals de l'aplicació
+                // 🔍 2. Obtenim la plantilla REAL (id_template) associada a la sessió de l'equip
+                const { data: sessioData } = await supabase
+                    .from('sessions')
+                    .select('id_sessio, id_template, id_client')
+                    .eq('id_sessio', equipData.id_sessio)
+                    .single();
+
+                const realTemplate = sessioData?.id_template || 'CAS_DEMO_EXPRESS';
+
+                // 🔄 3. Actualitzem els estats de React
                 setIdEquip(savedEquipId);
-                if (savedSessioId) setIdSessioGlobal(savedSessioId);
+                if (sessioData?.id_sessio) setIdSessioGlobal(sessioData.id_sessio);
+                if (sessioData?.id_client) setIdClient(sessioData.id_client);
+                setIdTemplateSessio(realTemplate);
 
-                const template = savedTemplate || 'CAS_OMNIA_2026';
-                setIdTemplateSessio(template);
-
-                // Carreguem la missió on s'havia quedat l'equip
+                // 🎯 4. CLAU: Passem 'realTemplate' EXPLÍCITAMENT com a segon paràmetre
+                // per no dependre del canvi d'estat asíncron de React
                 const faseARecuperar = savedMissio || '0';
-                await carregarMissio(faseARecuperar, template);
+                await carregarMissio(faseARecuperar, realTemplate);
 
-                // Ocultem la pantalla d'accés (PIN) i entrem directament a la simulació
                 setFaseEnquesta('PRE_TEST');
                 setEnviat(true);
 
@@ -371,7 +377,7 @@ function SimulacioContent() {
         };
 
         autoRecuperarSessio();
-    }, []); // 👈 S'executa només 1 vegada al carregar el component
+    }, []);
 
     // 🎯 SINCRONITZACIÓ EN TEMPS REAL: FORÇAR SALT DE FASE I NOTIFICAR L'ALUMNE
     useEffect(() => {
@@ -422,6 +428,7 @@ function SimulacioContent() {
             const missioKey = numMatch ? numMatch[0] : rawStr;
 
             const missionsDict = data?.scenario_context?.missions || {};
+            setMissioConfigAll(missionsDict);
 
             // 🔍 1. Cerca intel·ligent de la clau exacta o per número
             let clauReal = Object.keys(missionsDict).find(k =>
@@ -1208,34 +1215,57 @@ function SimulacioContent() {
                 </div>
 
                 {/* 🎯 BARRA PESTANYES DE NAVEGACIÓ D'HISTÒRIC DE FASES */}
-                <div className="max-w-4xl mx-auto flex items-center gap-1.5 overflow-x-auto py-1">
-                    {['0', '1', '2', '3', '4'].map((faseNum) => {
-                        const esFaseCompletada = Number(faseNum) < Number(missioActual);
-                        const esFaseActiva = missioActual === faseNum;
-                        const esFaseBloquejada = Number(faseNum) > Number(missioActual);
-                        const esLaMirada = faseVisualitzada === faseNum;
+                {(() => {
+                    // 1. Obtenim les claus de les fases que existeixen a la plantilla o a l'històric registrat
+                    const clausPlantilla = missioConfigAll ? Object.keys(missioConfigAll) : [];
+                    const clausHistoric = Object.keys(historicXats);
+                    const fasesDisponibles = Array.from(new Set([...clausPlantilla, ...clausHistoric]));
 
-                        if (esFaseBloquejada) return null;
+                    // Si encara no s'ha carregat cap plantilla, fem fallback a la fase actual
+                    const llistaFases = fasesDisponibles.length > 0 ? fasesDisponibles : [missioActual];
 
-                        return (
-                            <button
-                                key={faseNum}
-                                type="button"
-                                onClick={() => {
-                                    setFaseVisualitzada(faseNum);
-                                    setMessages(historicXats[faseNum] || []);
-                                }}
-                                className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
-                                    ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
-                                    : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
-                                    }`}
-                            >
-                                <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>
-                                <span>Fase {faseNum}</span>
-                            </button>
-                        );
-                    })}
-                </div>
+                    // 2. Trobem l'índex de la fase actual per no dependre de Number()
+                    const indexActual = llistaFases.findIndex(
+                        (k) => k === missioActual || k.endsWith(missioActual) || missioActual.endsWith(k)
+                    );
+                    const idxReal = indexActual !== -1 ? indexActual : 0;
+
+                    return (
+                        <div className="max-w-4xl mx-auto flex items-center gap-1.5 overflow-x-auto py-1">
+                            {llistaFases.map((faseKey, idx) => {
+                                const esFaseCompletada = idx < idxReal;
+                                const esFaseActiva = idx === idxReal;
+                                const esFaseBloquejada = idx > idxReal;
+                                const esLaMirada = faseVisualitzada === faseKey;
+
+                                // 🔒 Amaguem les fases futures que encara no s'han activat
+                                if (esFaseBloquejada) return null;
+
+                                // Etiqueta neta per al botó (ex: mostra "Fase 1" encara que la clau sigui "MISION_1")
+                                const numExtret = faseKey.match(/\d+/);
+                                const nomNet = numExtret ? `Fase ${numExtret[0]}` : faseKey;
+
+                                return (
+                                    <button
+                                        key={faseKey}
+                                        type="button"
+                                        onClick={() => {
+                                            setFaseVisualitzada(faseKey);
+                                            setMessages(historicXats[faseKey] || []);
+                                        }}
+                                        className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
+                                                ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
+                                                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                            }`}
+                                    >
+                                        <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>
+                                        <span>{nomNet}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    );
+                })()}
 
                 {/* BANNER D'AVÍS D'AVANÇAMENT DE FASE FORÇAT PEL FACILITADOR */}
                 {notificacioCanviFase && (
