@@ -234,7 +234,6 @@ function SimulacioContent() {
     // Estats del formulari d'entrada
     const [pin, setPin] = useState<string>('');
     const [nomsEquip, setNomsEquip] = useState<string>('');
-    const [riscIA, setRiscIA] = useState<string>('');
 
     // Estats de la UI i Drawer
     const [dossierObert, setDossierObert] = useState<boolean>(false);
@@ -880,6 +879,26 @@ function SimulacioContent() {
         }
     };
 
+    const handleSortirSessio = () => {
+        const confirmacio = window.confirm(
+            "Segur que vols sortir d'aquesta sessió?\n\nEl progrés de l'equip no es perdrà, però hauràs de tornar a introduir el PIN per tornar a accedir."
+        );
+
+        if (!confirmacio) return;
+
+        // 1. Esborrem la sessió guardada al navegador
+        localStorage.removeItem('synusia_active_session');
+
+        // 2. Restableix els estats principals per tornar a la pantalla de PIN
+        setIdEquip('');
+        setEnviat(false);
+        setMessages([]);
+        setHistoricXats({});
+        setMissioConfig(null);
+        setMissioActual('0');
+        setFaseVisualitzada('0');
+    };
+
     const formatarTemps = (segons: number) => {
         const minuts = Math.floor(segons / 60);
         const segonsRestants = segons % 60;
@@ -1201,7 +1220,7 @@ function SimulacioContent() {
                     </div>
                 </div>
 
-                {/* 🎯 BARRA PESTANYES DE NAVEGACIÓ D'HISTÒRIC DE FASES */}
+                {/* 🎯 BARRA PESTANYES DE NAVEGACIÓ D'HISTÒRIC DE FASES I BOTÓ SORTIR */}
                 {(() => {
                     // 1. Obtenim les claus de les fases que existeixen a la plantilla o a l'històric registrat
                     const clausPlantilla = missioConfigAll ? Object.keys(missioConfigAll) : [];
@@ -1218,38 +1237,54 @@ function SimulacioContent() {
                     const idxReal = indexActual !== -1 ? indexActual : 0;
 
                     return (
-                        <div className="max-w-4xl mx-auto flex items-center gap-1.5 overflow-x-auto py-1">
-                            {llistaFases.map((faseKey, idx) => {
-                                const esFaseCompletada = idx < idxReal;
-                                const esFaseActiva = idx === idxReal;
-                                const esFaseBloquejada = idx > idxReal;
-                                const esLaMirada = faseVisualitzada === faseKey;
+                        <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 py-1 mb-2">
 
-                                // 🔒 Amaguem les fases futures que encara no s'han activat
-                                if (esFaseBloquejada) return null;
+                            {/* GRUP ESQUERRE: Pestanyes de les fases */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto">
+                                {llistaFases.map((faseKey, idx) => {
+                                    const esFaseCompletada = idx < idxReal;
+                                    const esFaseActiva = idx === idxReal;
+                                    const esFaseBloquejada = idx > idxReal;
+                                    const esLaMirada = faseVisualitzada === faseKey;
 
-                                // Etiqueta neta per al botó (ex: mostra "Fase 1" encara que la clau sigui "MISION_1")
-                                const numExtret = faseKey.match(/\d+/);
-                                const nomNet = numExtret ? `Fase ${numExtret[0]}` : faseKey;
+                                    // 🔒 Amaguem les fases futures que encara no s'han activat
+                                    if (esFaseBloquejada) return null;
 
-                                return (
-                                    <button
-                                        key={faseKey}
-                                        type="button"
-                                        onClick={() => {
-                                            setFaseVisualitzada(faseKey);
-                                            setMessages(historicXats[faseKey] || []);
-                                        }}
-                                        className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
-                                            ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
-                                            : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
-                                            }`}
-                                    >
-                                        <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>
-                                        <span>{nomNet}</span>
-                                    </button>
-                                );
-                            })}
+                                    // Etiqueta neta per al botó (ex: mostra "Fase 1" encara que la clau sigui "MISION_1")
+                                    const numExtret = faseKey.match(/\d+/);
+                                    const nomNet = numExtret ? `Fase ${numExtret[0]}` : faseKey;
+
+                                    return (
+                                        <button
+                                            key={faseKey}
+                                            type="button"
+                                            onClick={() => {
+                                                setFaseVisualitzada(faseKey);
+                                                setMessages(historicXats[faseKey] || []);
+                                            }}
+                                            className={`text-[11px] font-mono px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 border ${esLaMirada
+                                                ? 'bg-stone-900 text-stone-50 border-stone-900 font-bold shadow-xs'
+                                                : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-100'
+                                                }`}
+                                        >
+                                            <span>{esFaseCompletada ? '✓' : (esFaseActiva ? '📍' : '📖')}</span>
+                                            <span>{nomNet}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* GRUP DRET: Botó de Sortir */}
+                            <button
+                                type="button"
+                                onClick={handleSortirSessio}
+                                className="text-[11px] font-mono text-stone-500 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 px-2.5 py-1 rounded-lg transition-all border border-stone-200 cursor-pointer flex items-center gap-1 shrink-0"
+                                title="Tancar la sessió local i tornar a la pantalla de PIN"
+                            >
+                                <span>🚪</span>
+                                <span>Sortir</span>
+                            </button>
+
                         </div>
                     );
                 })()}
