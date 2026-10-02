@@ -226,17 +226,33 @@ export async function POST(request: NextRequest) {
     let botRoleTitle = 'Assistent';
     let codiDesblocatge = "";
 
-    // Normalització de la clau de la missió (extreu '1' de '1' o de 'MISSION_1_OMNIA_SOUND')
     const rawMissioStr = String(missio_actual);
     const missioNumMatch = rawMissioStr.match(/\d+/);
     const missioKey = missioNumMatch ? missioNumMatch[0] : rawMissioStr;
 
-    if (templateData?.scenario_context?.missions?.[missioKey]) {
-      const currentConfig = templateData.scenario_context.missions[missioKey];
+    // 🎯 CERCA DINÀMICA DE LA CLAU DE LA MISSIÓ
+    const missionsDict = templateData?.scenario_context?.missions || {};
+    const availableKeys = Object.keys(missionsDict);
+
+    // Troba la clau tant si és 'MISION_1', '1', '0' o similar
+    let matchedKey = availableKeys.find(k =>
+      k === rawMissioStr ||
+      k === missioKey ||
+      k === `MISION_${missioKey}` ||
+      (k.match(/\d+/) && k.match(/\d+/)![0] === missioKey)
+    );
+
+    // Fallback d'inici: Si es demana la fase '0' o '1' i la plantilla comença per 'MISION_1'
+    if (!matchedKey && (missioKey === '0' || missioKey === '1') && availableKeys.length > 0) {
+      matchedKey = availableKeys[0];
+    }
+
+    if (matchedKey && missionsDict[matchedKey]) {
+      const currentConfig = missionsDict[matchedKey];
       codiDesblocatge = currentConfig.codi_desblocatge || "";
       systemPrompt = currentConfig.system_prompt || "";
-      botName = currentConfig.bot_name || botName;
-      botRoleTitle = currentConfig.bot_role || botRoleTitle;
+      botName = currentConfig.bot_name || 'Sergi - Cap de Sistemes';
+      botRoleTitle = currentConfig.bot_role || currentConfig.bot_role || 'Interlocutor';
     } else if (templateData?.interaction_protocols?.system_prompt) {
       systemPrompt = templateData.interaction_protocols.system_prompt;
       codiDesblocatge = templateData.interaction_protocols.clau_desblocatge || "";
@@ -389,7 +405,7 @@ Respon de forma natural i coherent amb el teu rol. L'input de l'usuari s'inclou 
         {
           id_equip: id_equip,
           id_missio: String(missio_actual),
-          actor: 'ARIA',
+          actor: 'IA_BOT',
           text: respostaText,
           tokens_consumits: tokensUsed
         }
