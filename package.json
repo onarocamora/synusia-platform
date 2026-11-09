@@ -9,9 +9,16 @@
     "lint": "eslint",
     "audit": "npx tsx scripts/audit-code.ts",
     "fix": "npx tsx scripts/fix-code.ts",
-    "fix:all": "npx tsx scripts/fix-all.ts"
+    "fix:all": "npx tsx scripts/fix-all.ts",
+    "test": "vitest run tests/bars-evaluator.test.ts tests/case-template.test.ts tests/longitudinal-analysis.test.ts",
+    "test:watch": "vitest tests/bars-evaluator.test.ts tests/case-template.test.ts tests/longitudinal-analysis.test.ts",
+    "test:ai": "vitest run tests/benchmark.test.ts tests/e2e-longitudinal-pipeline.test.ts",
+    "test:benchmark": "vitest run tests/benchmark.test.ts",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
     "@supabase/supabase-js": "^2.110.2",
     "@vercel/analytics": "^2.0.1",
     "dotenv": "^17.4.2",
@@ -32,6 +39,8 @@
     "eslint-config-next": "^14.2.0",
     "supabase": "^2.116.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vite": "^8.3.5",
+    "vitest": "^5.1.0"
   }
 }

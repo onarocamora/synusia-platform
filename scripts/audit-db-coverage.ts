@@ -1,5 +1,5 @@
 // scripts/audit-db-coverage.ts
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin as supabase } from '@/lib/supabase';
 import * as dotenv from 'dotenv'
 
 dotenv.config({ path: '.env.local' })
@@ -12,7 +12,7 @@ if (!supabaseUrl || !supabaseKey) {
     process.exit(1)
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey)
+export const dynamic = 'force-dynamic';
 
 // UUIDs i IDs vàlids temporals per als tests
 const TEST_CLIENT_ID = '77777777-7777-4777-8777-777777777777'

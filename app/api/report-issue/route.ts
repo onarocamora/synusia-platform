@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const supabase = createClient(supabaseUrl, supabaseKey);
+        
 
         const body = await request.json().catch(() => ({}));
         const { id_sessio, id_equip, missatge_ia, motiu, detall } = body;

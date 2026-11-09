@@ -12,6 +12,7 @@ test('FLUX COMPLET UI NOVA: Creació de sessió, unió, xat i sincronització', 
     console.log('📡 [1] Admin entra a /admin...');
     await pageAdmin.goto('/admin');
     await pageAdmin.waitForLoadState('networkidle');
+    console.log('📍 URL actual del navegador:', pageAdmin.url());
 
     // Premer botó de nova sessió
     const botoLlançar = pageAdmin.locator('button:has-text("Llançar Nova Sessió"), button:has-text("Nova Sessió")').first();
@@ -39,7 +40,7 @@ test('FLUX COMPLET UI NOVA: Creació de sessió, unió, xat i sincronització', 
     console.log(`🔑 [2] PIN detectat automàticament: "${pinSessio}"`);
 
     // -------------------------------------------------------------
-    // 2. NAVEGADOR 2: PANTALLA DE L'ALUMNE (NOVA UI)
+    // 2. NAVEGADOR 2: PANTALLA DE L'OPERATOR (NOVA UI)
     // -------------------------------------------------------------
     const contextAlumne = await browser.newContext();
     const pageAlumne = await contextAlumne.newPage();

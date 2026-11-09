@@ -189,6 +189,9 @@ export default function AdminDashboard() {
       if (error) {
         setLoginError('Accés denegat. Credencials incorrectes.')
       } else {
+        // Sincronitzem la galeta amb el servidor per habilitar l'accés a /reports
+        await fetch('/api/auth/session', { method: 'POST' }).catch(() => {})
+
         posthog.capture('facilitator_logged_in')
         setSession(data.session)
       }
@@ -200,6 +203,9 @@ export default function AdminDashboard() {
   }
 
   const handleLogout = async () => {
+    // Esborrem la galeta del servidor
+    await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {})
+
     await supabase.auth.signOut()
     setSession(null)
     setEquips([])
@@ -240,6 +246,7 @@ export default function AdminDashboard() {
     }
   }
 
+  
   const carregarTotesLesSessions = async (userIdParam?: string) => {
     const activeUserId = userIdParam || session?.user?.id
     if (!activeUserId) return
@@ -247,19 +254,8 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from('sessions')
-        .select(`
-          id_sessio,
-          pin_acces,
-          estat,
-          id_template,
-          pedagogical_templates (
-            id_template,
-            titol,
-            is_official,
-            scenario_context
-          )
-        `)
-        .eq('user_id', activeUserId)
+        .select('id_sessio, pin_acces, estat, id_template')
+        .or(`user_id.eq.${activeUserId},user_id.is.null`)
         .order('id_sessio', { ascending: false })
 
       if (error) {
@@ -421,7 +417,7 @@ export default function AdminDashboard() {
 
           if (logsData) {
             logsData.forEach((log: any) => {
-              if (log.actor === 'USER' || log.actor === 'ALUMNE') {
+              if (log.actor === 'USER' || log.actor === 'OPERATOR') {
                 logsMap[log.id_equip] = (logsMap[log.id_equip] || 0) + 1
               }
             })
@@ -636,8 +632,13 @@ export default function AdminDashboard() {
     document.body.removeChild(link)
   }
 
-  const sessionsActives = totesLesSessions.filter(s => s.estat === 'EN_CURS' || s.estat === 'ACTIVA')
-  const sessionsArxivades = totesLesSessions.filter(s => s.estat === 'FINALITZADA')
+  const esSessioArxivada = (estat?: string) => {
+    const e = (estat || '').toUpperCase().trim();
+    return e === 'FINALITZADA' || e === 'TANCADA' || e === 'ARCHIVED' || e === 'COMPLETED';
+  };
+
+  const sessionsActives = totesLesSessions.filter(s => !esSessioArxivada(s.estat))
+  const sessionsArxivades = totesLesSessions.filter(s => esSessioArxivada(s.estat))
 
   if (authChecking) {
     return (
@@ -895,6 +896,12 @@ export default function AdminDashboard() {
               >
                 Projectar PIN
               </button>
+              <Link
+                href={`/reports/${idSessio}`}
+                className="bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-xs font-medium px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+              >
+                📊 Informe HITL &rarr;
+              </Link>
 
               <button
                 onClick={() => descarregarTelemetria(idSessio, 'csv')}
@@ -1207,13 +1214,19 @@ export default function AdminDashboard() {
                             FINALITZADA
                           </span>
                         </td>
-                        <td className="p-4 text-right space-x-2">
+                        <td className="p-4 text-right space-x-3">
                           <button
                             onClick={() => carregarDadesSessio(s.pin_acces)}
-                            className="text-stone-700 hover:text-stone-900 font-medium underline underline-offset-2 cursor-pointer"
+                            className="text-stone-500 hover:text-stone-800 text-xs font-medium cursor-pointer transition-colors"
                           >
-                            Revisar Avaluacions
+                            Carregar al taulell
                           </button>
+                          <Link
+                            href={`/reports/${s.id_sessio}`}
+                            className="inline-flex items-center gap-1 bg-stone-900 hover:bg-stone-800 text-white text-xs font-medium px-3 py-1.5 rounded-xl transition-all shadow-xs"
+                          >
+                            Informe HITL &rarr;
+                          </Link>
                         </td>
                       </tr>
                     ))

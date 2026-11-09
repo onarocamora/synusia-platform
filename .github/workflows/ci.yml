@@ -1,0 +1,38 @@
+# .github/workflows/ci.yml
+name: CI Pipeline (Types & Tests)
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  validate:
+    name: Comprovació de Tipus i Tests Ràpids
+    runs-on: ubuntu-latest
+
+    env:
+      # Valors ficticis per evitar que Supabase falli en inicialitzar-se en memòria
+      NEXT_PUBLIC_SUPABASE_URL: "https://ci-test.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-dummy-anon-key"
+      SUPABASE_SERVICE_ROLE_KEY: "ci-dummy-service-role-key"
+
+    steps:
+      - name: Baixar el codi del repositori
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Instal·lar dependències
+        run: npm ci
+
+      - name: Verificació de tipus TypeScript
+        run: npx tsc --noEmit
+
+      - name: Execució de tests psicomètrics i esquemes Zod
+        run: npm test

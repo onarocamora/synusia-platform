@@ -133,7 +133,7 @@ ${systemPrompt}
           id_equip: id_equip,
           tipo_evento: 'PROMPT_SUBMISSION',
           metrics_payload: {
-            actor: 'ALUMNE',
+            actor: 'OPERATOR',
             missio: missio_actual,
             text: inputUsuari,
             nom_equip: nomEquip,

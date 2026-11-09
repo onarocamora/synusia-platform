@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import posthog from 'posthog-js';
+import Link from 'next/link';
 
 // ---------------------------------------------------------------------------
 // TYPES & INTERFACES
@@ -46,11 +47,12 @@ interface ConfidenceModalProps {
     isOpen: boolean;
     type: 'MOMENT_A' | 'MOMENT_B';
     botName: string;
-    onConfirm: (rating: number) => void;
+    onConfirm: (rating: number) => Promise<void> | void;
 }
 
-function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalProps) {
+export function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalProps) {
     const [selectedRating, setSelectedRating] = useState<number | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     if (!isOpen) return null;
 
@@ -65,12 +67,35 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
         : `Heu detectat i corregit els errors? Quina seguretat teniu abans de signar l'auditoria?`;
 
     const labels = isMomentA
-        ? ['1 - Cap confiança. Ho vull comprovar tot.', '2 - Em fa dubtar bastant.', '3 - Crec que està bé (Però ho revisaria).', '4 - Em refio bastant.', '5 - M\'ho crec al 100%. Ho enviaria tal qual.']
-        : ['1 - Gens segurs. Hem anat a cegues.', '2 - Ens falta alguna cosa.', '3 - Bastant bé.', '4 - Molt segurs.', '5 - 100% segurs. Tot net.'];
+        ? [
+            '1 - Cap confiança. Ho vull comprovar tot.',
+            '2 - Em fa dubtar bastant.',
+            '3 - Crec que està bé (Però ho revisaria).',
+            '4 - Em refio bastant.',
+            '5 - M\'ho crec al 100%. Ho enviaria tal qual.'
+          ]
+        : [
+            '1 - Gens segurs. Hem anat a cegues.',
+            '2 - Ens falta alguna cosa.',
+            '3 - Bastant bé.',
+            '4 - Molt segurs.',
+            '5 - 100% segurs. Tot net.'
+          ];
 
     const wrapperClasses = isMomentA
         ? "fixed inset-0 z-40 flex items-end justify-center pb-20 px-4 pointer-events-none"
         : "fixed inset-0 z-50 flex items-center justify-center bg-stone-900/60 backdrop-blur-xs p-4 animate-fade-in";
+
+    const handleConfirm = async () => {
+        if (selectedRating === null || isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            await onConfirm(selectedRating);
+            setSelectedRating(null);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     return (
         <div className={wrapperClasses}>
@@ -88,11 +113,13 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
                         <button
                             key={val}
                             type="button"
+                            disabled={isSubmitting}
                             onClick={() => setSelectedRating(val)}
-                            className={`flex flex-col items-center justify-center py-2.5 rounded-xl border font-bold text-sm transition-all cursor-pointer ${selectedRating === val
-                                ? 'bg-amber-500 border-amber-600 text-stone-950 scale-105 shadow-md'
-                                : 'bg-[#FAF8F5] border-stone-200 text-stone-700 hover:bg-stone-100'
-                                }`}
+                            className={`flex flex-col items-center justify-center py-2.5 rounded-xl border font-bold text-sm transition-all cursor-pointer ${
+                                selectedRating === val
+                                    ? 'bg-amber-500 border-amber-600 text-stone-950 scale-105 shadow-md'
+                                    : 'bg-[#FAF8F5] border-stone-200 text-stone-700 hover:bg-stone-100'
+                            } disabled:opacity-50`}
                         >
                             <span>{val}</span>
                         </button>
@@ -107,16 +134,11 @@ function ConfidenceModal({ isOpen, type, botName, onConfirm }: ConfidenceModalPr
 
                 <button
                     type="button"
-                    disabled={selectedRating === null}
-                    onClick={() => {
-                        if (selectedRating !== null) {
-                            onConfirm(selectedRating);
-                            setSelectedRating(null);
-                        }
-                    }}
+                    disabled={selectedRating === null || isSubmitting}
+                    onClick={handleConfirm}
                     className="w-full py-2.5 rounded-xl bg-stone-900 text-stone-50 font-medium text-xs hover:bg-stone-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm"
                 >
-                    Confirmar Votació →
+                    {isSubmitting ? 'Registrant votació...' : 'Confirmar Votació →'}
                 </button>
             </div>
         </div>
@@ -378,7 +400,7 @@ function SimulacioContent() {
         autoRecuperarSessio();
     }, []);
 
-    // 🎯 SINCRONITZACIÓ EN TEMPS REAL: FORÇAR SALT DE FASE I NOTIFICAR L'ALUMNE
+    // 🎯 SINCRONITZACIÓ EN TEMPS REAL: FORÇAR SALT DE FASE I NOTIFICAR L'OPERADOR
     useEffect(() => {
         if (!idEquip || !enviat) return;
 
@@ -571,55 +593,55 @@ function SimulacioContent() {
     };
 
 
-    // 🎯 DESAR MÈTRIQUES DEL PILOT A SUPABASE (Amb gestió de cua Offline)
-    const desarMetriquesFase = async (notaMomentB: number) => {
-        if (!idEquip) return;
+    // 🎯 DESAR MÈTRIQUES DEL PILOT I TELEMETRIA (Versió Resilient)
+const desarMetriquesFase = async (notaMomentB: number) => {
+    if (!idEquip) return;
 
-        const totalPrompts = messages.filter(m => m.role === 'user').length;
+    const totalPrompts = messages.filter(m => m.role === 'user').length;
 
-        // 1. Creem l'objecte de mètriques unificat
-        const metricaPayload = {
-            id_sessio: idSessioGlobal || null,
-            id_equip: idEquip,
-            fase_id: String(missioActual),
-            moment_a_confianca: momentAConfidence ? Number(momentAConfidence) : null,
-            moment_b_seguretat: notaMomentB ? Number(notaMomentB) : null,
-            prompts_enviats: totalPrompts,
-            completat_el: new Date().toISOString()
-        };
+    const metricaPayload = {
+        id_sessio: idSessioGlobal || null,
+        id_equip: idEquip,
+        missio_actual: String(missioActual),
+        moment_a_confianca: momentAConfidence ? Number(momentAConfidence) : null,
+        moment_b_seguretat: notaMomentB ? Number(notaMomentB) : null,
+        prompts_enviats: totalPrompts,
+        timestamp: new Date().toISOString()
+    };
 
-        // 2. Si estem directament sense xarxa, desem a localStorage i sortim
-        if (typeof window !== 'undefined' && !navigator.onLine) {
-            const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
-            cua.push(metricaPayload);
-            localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
-            return;
-        }
-
-        // 3. Si estem online, intentem enviar-ho a Supabase
+    const desarACuaOffline = (item: typeof metricaPayload) => {
+        if (typeof window === 'undefined') return;
         try {
-            const { error } = await supabase
-                .from('pilot_evaluation_metrics')
-                .upsert(metricaPayload, { onConflict: 'id_equip,fase_id' });
-
-            if (error) {
-                console.error('Error desant mètriques a Supabase:', error.message);
-                // Si la BBDD falla, desem a la cua de seguretat
-                if (typeof window !== 'undefined') {
-                    const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
-                    cua.push(metricaPayload);
-                    localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
-                }
-            }
-        } catch (err) {
-            console.error('Excepció de xarxa en desar mètriques:', err);
-            if (typeof window !== 'undefined') {
-                const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
-                cua.push(metricaPayload);
-                localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
-            }
+            const cua = JSON.parse(localStorage.getItem('faro_offline_queue') || '[]');
+            cua.push(item);
+            localStorage.setItem('faro_offline_queue', JSON.stringify(cua));
+        } catch (e) {
+            console.error('Error escrivint a localStorage:', e);
         }
     };
+
+    // Si estem offline, guardem a la cua local
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+        desarACuaOffline(metricaPayload);
+        return;
+    }
+
+    // Si estem online, enviem a la ruta dedicada
+    try {
+        const res = await fetch('/api/telemetry/confidence', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(metricaPayload)
+        });
+
+        if (!res.ok) {
+            desarACuaOffline(metricaPayload);
+        }
+    } catch (err) {
+        console.warn('Error de xarxa en contactar /api/telemetry/confidence:', err);
+        desarACuaOffline(metricaPayload);
+    }
+};
 
     // 🔄 Escoltar quan torna la connexió per buidar la cua a Supabase
     useEffect(() => {
@@ -1107,11 +1129,25 @@ function SimulacioContent() {
                                 <div className="space-y-2">
                                     <h2 className="text-2xl font-serif font-medium text-stone-900">Simulació Completada</h2>
                                     <p className="text-sm text-stone-500 max-w-sm mx-auto leading-relaxed">
-                                        L'informe s'ha registrat correctament. Ara pots compartir la teva experiència amb els teus companys o a les xarxes socials.
+                                        L&apos;informe s&apos;ha registrat correctament a la cadena de custòdia de la sessió.
                                     </p>
                                 </div>
 
-                                <div className="pt-4 w-full max-w-md mx-auto space-y-2">
+                                {/* CTA PRIMARI: Accés exclusiu i privat de l'equip al seu progrés BARS */}
+                                <div className="pt-2 w-full max-w-md mx-auto space-y-2">
+                                    <Link
+                                        href={`/teams/${encodeURIComponent(nomsEquip)}/progress`}
+                                        className="w-full flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs py-3.5 px-4 rounded-xl transition-all shadow-md cursor-pointer"
+                                    >
+                                        📊 Consultar la teva evolució d&apos;equip (BARS) &rarr;
+                                    </Link>
+                                    <p className="text-[11px] text-stone-400">
+                                        Retorn privat sobre el biaix d&apos;automatització i competències HITL
+                                    </p>
+                                </div>
+
+                                {/* CTA SECUNDARI: Reserva per a organitzacions */}
+                                <div className="pt-2 w-full max-w-md mx-auto space-y-2 border-t border-stone-100">
                                     <a
                                         href="https://calendar.app.google/PsYN19cM3PNzqbkD6"
                                         target="_blank"
@@ -1125,15 +1161,16 @@ function SimulacioContent() {
                                     </p>
                                 </div>
 
-                                <div className="pt-6 w-full max-w-md mx-auto space-y-4 border-t border-stone-100">
+                                {/* Compartició a xarxes */}
+                                <div className="pt-4 w-full max-w-md mx-auto space-y-4 border-t border-stone-100">
                                     <span className="text-[10px] font-mono tracking-widest text-stone-400 uppercase block">
-                                        Comparteix l'experiència
+                                        Comparteix l&apos;experiència
                                     </span>
 
                                     <button
                                         onClick={() => {
                                             const text = encodeURIComponent(
-                                                `🚀 L'equip "${nomsEquip}" acaba de completar la simulació d'IA a Synusia! \n\nHem aconseguir gestionar els agents amb èxit i enviar l'informe final.\n\nAcceptes el repte? Prova la demo express aquí (PIN: DEMO):\nhttps://app.synusia.io`
+                                                `🚀 L'equip "${nomsEquip}" acaba de completar la simulació d'IA a Synusia! \n\nHem aconseguit gestionar els agents amb èxit i enviar l'informe final.\n\nAcceptes el repte? Prova la demo express aquí (PIN: DEMO):\nhttps://app.synusia.io`
                                             );
                                             window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
                                         }}
@@ -1152,7 +1189,7 @@ function SimulacioContent() {
                                             rel="noopener noreferrer"
                                             className="flex items-center justify-center gap-1.5 bg-[#0077b5] text-white px-3 py-2 rounded-xl text-[11px] font-medium hover:bg-[#006396] transition-colors"
                                         >
-                                            <Image src="/linkedin.svg" alt="LinkedIn" width={12} height={12} className="brightness-0 invert" />
+                                            <Image src="/linkedin.svg" alt="LinkedIn" width={12} height={12} className="brightness-0 invert" style={{ width: 'auto', height: 'auto' }}/>
                                             LinkedIn
                                         </a>
                                         <a

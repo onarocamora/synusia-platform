@@ -1,8 +1,13 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Missing required Supabase environment variables: NEXT_PUBLIC_SUPABASE_URL and/or NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+}
+
+export const dynamic = 'force-dynamic';
 
 // 1. Tipus d'esdeveniments dominis de l'aplicació (Ampliat amb mètriques FARO V3)
 export type ApplicationEventType =
@@ -60,7 +65,7 @@ export interface TelemetryPayload {
     sessionId: string; // Requereix UUID vàlid
     teamId: string;    // Requereix UUID vàlid
     teamName?: string;
-    actor: 'ALUMNE' | 'IA_BOT' | 'SISTEMA';
+    actor: 'OPERATOR' | 'IA_BOT' | 'SISTEMA';
     eventType: ApplicationEventType;
     mission: string;
     text?: string;

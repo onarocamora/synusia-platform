@@ -142,7 +142,7 @@ export default function AdminAnalyticsDashboard() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
                 <div>
                     <span className="text-xs font-mono uppercase tracking-widest text-amber-500 font-bold">
-                        PANEL DE SUPERVISIÓ DOCENT · SESSIONS 160 ALUMNES
+                        PANEL DE SUPERVISIÓ DOCENT · SESSIONS 160 OPERADORS
                     </span>
                     <h1 className="text-2xl font-bold text-white mt-1">
                         Anàlisi Cognitiva i Telemetria en Temps Real

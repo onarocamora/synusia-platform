@@ -876,7 +876,7 @@ export default function AdminDashboard() {
   // 🔒 TANCAMENT REALS
   const arxivarSessióMestre = async () => {
     if (!idSessio) return
-    const confirmar = confirm("🚨 Vols donar per acabat aquest taller i FINALITZAR la sessió? Els equips quedaran arxivats i la terminal de l'alumne es bloquejarà.")
+    const confirmar = confirm("🚨 Vols donar per acabat aquest taller i FINALITZAR la sessió? Els equips quedaran arxivats i la terminal de l'OPERADOR es bloquejarà.")
     if (!confirmar) return
 
     setLoading(true)
@@ -1402,7 +1402,7 @@ ${systemPrompt}
           id_equip: id_equip,
           tipo_evento: 'PROMPT_SUBMISSION',
           metrics_payload: {
-            actor: 'ALUMNE',
+            actor: 'OPERATOR',
             missio: missio_actual,
             text: inputUsuari,
             nom_equip: nomEquip,

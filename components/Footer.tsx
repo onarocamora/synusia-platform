@@ -14,13 +14,13 @@ export default function Footer() {
     return (
         <footer className="w-full py-4 border-t border-stone-200/60 text-center flex items-center justify-center gap-6 opacity-40 hover:opacity-100 transition-opacity">
             <a href="https://linkedin.com/showcase/synusia-io" target="_blank" rel="noreferrer">
-                <Image src="/linkedin.svg" alt="LinkedIn" width={20} height={20} />
+                <Image src="/linkedin.svg" alt="LinkedIn" width={20} height={20} style={{ width: 'auto', height: 'auto' }}/>
             </a>
             <a href="https://instagram.com/synusia.io" target="_blank" rel="noreferrer">
-                <Image src="/instagram.svg" alt="Instagram" width={20} height={20} />
+                <Image src="/instagram.svg" alt="Instagram" width={20} height={20} style={{ width: 'auto', height: 'auto' }} />
             </a>
             <a href="https://synusia.io/" target="_blank" rel="noreferrer">
-                <Image src="/web.svg" alt="Web" width={20} height={20} />
+                <Image src="/web.svg" alt="Web" width={20} height={20} style={{ width: 'auto', height: 'auto' }} />
             </a>
         </footer>
     )
