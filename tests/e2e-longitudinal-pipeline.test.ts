@@ -41,7 +41,7 @@ async function insertInteractionLogs(
 }
 
 async function fetchInteractionLogs(teamId: string) {
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('logs_interaccio')
     .select('actor, text, creat_el')
     .eq('id_equip', teamId)
@@ -56,7 +56,8 @@ async function fetchInteractionLogs(teamId: string) {
     if (fallback.error) {
       throw new Error(`Error recuperant logs de PostgreSQL: ${fallback.error.message}`);
     }
-    data = fallback.data;
+    // Devolvemos el mapeo directamente aquí
+    return (fallback.data || []).map((r) => ({ actor: r.actor as string, text: r.text as string }));
   }
 
   return (data || []).map((r) => ({ actor: r.actor as string, text: r.text as string }));
