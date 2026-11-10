@@ -380,7 +380,7 @@ export default function DemoChatUI({ uid }: { uid: string }) {
               {/* Acciones */}
               <div className="flex flex-col sm:flex-row gap-2 pt-1">
                 <a
-                  href="https://calendly.com/tu-enlace"
+                  href="https://calendar.app.google/akDdbLe2UvNNqFnV9"
                   target="_blank"
                   rel="noreferrer"
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-md bg-stone-900 py-2.5 px-3 text-center font-medium text-white hover:bg-stone-800 transition-colors"
